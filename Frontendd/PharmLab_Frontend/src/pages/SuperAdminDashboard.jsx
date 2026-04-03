@@ -448,15 +448,15 @@ export default function SuperAdminDashboard() {
             <div className='mt-3 space-y-2'>
               {selectedLab?.admins?.length ? (
                 selectedLab.admins.map((admin) => (
-                  <div key={admin._id || admin.id} className='flex items-center justify-between rounded-xl border border-[#d9e1ca] px-3 py-2 dark:border-[#414a33]'>
-                    <div>
+                  <div key={admin._id || admin.id} className='flex flex-col gap-3 rounded-xl border border-[#d9e1ca] px-3 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-[#414a33]'>
+                    <div className='min-w-0'>
                       <p className='text-sm font-medium text-[#3c4e23] dark:text-[#eef4e8]'>{admin.name}</p>
-                      <p className='text-xs text-[#71805a] dark:text-[#c5d0b5]'>{admin.email}</p>
+                      <p className='break-words text-xs text-[#71805a] dark:text-[#c5d0b5]'>{admin.email}</p>
                     </div>
                     <Button
                       variant='outline'
                       onClick={() => handleRemoveAdmin(admin._id || admin.id)}
-                      className='text-xs px-3 py-1'
+                      className='w-full text-xs px-3 py-1 sm:w-auto'
                       disabled={savingAdmin}
                     >
                       Remove
