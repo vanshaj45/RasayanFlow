@@ -17,6 +17,7 @@ export default function SuperAdminDashboard() {
     fetchLabs,
     fetchUsers,
     createLab,
+    deleteLab,
     createLabAdmin,
     createStoreAdmin,
     assignAdminToLab,
@@ -31,6 +32,7 @@ export default function SuperAdminDashboard() {
   const [manageOpen, setManageOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [savingAdmin, setSavingAdmin] = useState(false);
+  const [deletingLab, setDeletingLab] = useState(false);
   const [approvingUserId, setApprovingUserId] = useState('');
   const [selectedLab, setSelectedLab] = useState(null);
   const [selectedAdminId, setSelectedAdminId] = useState('');
@@ -207,6 +209,23 @@ export default function SuperAdminDashboard() {
       setToast({ type: 'error', message: error?.response?.data?.message || 'Failed to create admin account.' });
     } finally {
       setSavingAdmin(false);
+    }
+  };
+
+  const handleDeleteLab = async () => {
+    if (!selectedLab?.id) return;
+
+    setDeletingLab(true);
+    try {
+      await deleteLab(selectedLab.id);
+      await Promise.all([fetchLabs(), fetchUsers(), fetchActivityLogs({ limit: 100 })]);
+      setToast({ type: 'success', message: `${selectedLab.name} deleted.` });
+      setManageOpen(false);
+      setSelectedLab(null);
+    } catch (error) {
+      setToast({ type: 'error', message: error?.response?.data?.message || 'Failed to delete lab.' });
+    } finally {
+      setDeletingLab(false);
     }
   };
 
@@ -482,6 +501,20 @@ export default function SuperAdminDashboard() {
                 {savingAdmin ? 'Saving...' : 'Create Admin For Lab'}
               </Button>
             </div>
+          </div>
+          <div className='rounded-2xl border border-red-200 p-4 dark:border-red-900/50'>
+            <p className='text-sm font-medium text-red-700 dark:text-red-300'>Delete lab</p>
+            <p className='mt-1 text-xs text-[#71805a] dark:text-[#c5d0b5]'>
+              This permanently removes the lab, its inventory, and its linked transaction history. Lab admins assigned to it will be converted back to students.
+            </p>
+            <Button
+              variant='outline'
+              onClick={handleDeleteLab}
+              className='mt-4 w-full border-red-300 text-red-700 hover:bg-red-50 dark:border-red-900/50 dark:text-red-300 dark:hover:bg-red-950/20'
+              disabled={deletingLab}
+            >
+              {deletingLab ? 'Deleting...' : 'Delete Lab'}
+            </Button>
           </div>
         </div>
       </Modal>

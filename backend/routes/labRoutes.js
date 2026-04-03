@@ -3,7 +3,7 @@ const { body, param } = require('express-validator');
 const authMiddleware = require('../middleware/authMiddleware');
 const roleMiddleware = require('../middleware/roleMiddleware');
 const validateRequest = require('../middleware/validateMiddleware');
-const { createLab, listLabs, assignAdmin, removeAdmin, approveAdmin } = require('../controllers/labController');
+const { createLab, listLabs, assignAdmin, removeAdmin, approveAdmin, deleteLab } = require('../controllers/labController');
 
 const router = express.Router();
 
@@ -33,5 +33,6 @@ router.post(
 );
 
 router.put('/approve/:adminId', [param('adminId').isMongoId()], validateRequest, approveAdmin);
+router.delete('/:labId', [param('labId').isMongoId()], validateRequest, deleteLab);
 
 module.exports = router;
