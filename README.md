@@ -1,4 +1,4 @@
-# PharmLab - Pharmaceutical Laboratory Management System
+# Rasayan_Flow - Pharmaceutical Laboratory Management System
 
 A comprehensive web-based solution for managing pharmaceutical laboratory operations, inventory, and student borrowings. PharmLab streamlines laboratory resource management with role-based access control and real-time updates.
 
