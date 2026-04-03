@@ -1,14 +1,25 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Clock3, MapPin, PackageCheck, TestTube2 } from 'lucide-react';
+import { Clock3, MapPin, PackageCheck, Search, TestTube2 } from 'lucide-react';
 import useAppStore from '../store/appStore';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
 import Table from '../components/ui/Table';
 
 export default function StudentDashboard() {
-  const { labs, transactions, storeAllotments, fetchLabs, fetchTransactions, fetchStoreAllotments, setToast } = useAppStore();
+  const { labs, transactions, storeAllotments, fetchLabs, fetchTransactions, fetchStoreAllotments, fetchInventorySearch, setToast } = useAppStore();
   const navigate = useNavigate();
+  const [inventorySearch, setInventorySearch] = useState('');
+  const labLookup = useMemo(
+    () =>
+      labs.reduce((acc, lab) => {
+        const key = String(lab.id || lab._id || '');
+        if (key) acc[key] = lab;
+        return acc;
+      }, {}),
+    [labs]
+  );
 
   useEffect(() => {
     fetchLabs();
@@ -26,16 +37,6 @@ export default function StudentDashboard() {
     [borrowings]
   );
 
-  const dueSoonStoreItems = useMemo(
-    () =>
-      storeAllotments.filter((entry) => {
-        if (!entry.dueDate) return false;
-        const daysLeft = Math.ceil((new Date(entry.dueDate) - new Date()) / (1000 * 60 * 60 * 24));
-        return daysLeft >= 0 && daysLeft <= 3;
-      }),
-    [storeAllotments]
-  );
-
   const overdueStoreItems = useMemo(
     () =>
       storeAllotments.filter((entry) => {
@@ -45,6 +46,56 @@ export default function StudentDashboard() {
     [storeAllotments]
   );
 
+  const [inventoryMatches, setInventoryMatches] = useState([]);
+
+  useEffect(() => {
+    const query = inventorySearch.trim();
+
+    if (!query) {
+      setInventoryMatches([]);
+      return;
+    }
+
+    let active = true;
+
+    const timerId = setTimeout(async () => {
+      const results = await fetchInventorySearch(query);
+      if (active) {
+        setInventoryMatches(results);
+      }
+    }, 250);
+
+    return () => {
+      active = false;
+      clearTimeout(timerId);
+    };
+  }, [fetchInventorySearch, inventorySearch]);
+
+  const inventorySearchGroups = useMemo(() => {
+    if (!inventorySearch.trim()) return [];
+
+    return Object.values(
+      inventoryMatches.reduce((acc, item) => {
+        const linkedLab = item.labId ? labLookup[String(item.labId)] : null;
+        const resolvedLabName = item.labName || linkedLab?.name || linkedLab?.labName || 'Unknown lab';
+        const resolvedLabCode = item.labCode || linkedLab?.labCode || '';
+        const labKey = item.labId || resolvedLabName || 'unknown-lab';
+
+        if (!acc[labKey]) {
+          acc[labKey] = {
+            labId: item.labId,
+            labName: resolvedLabName,
+            labCode: resolvedLabCode,
+            items: [],
+          };
+        }
+
+        acc[labKey].items.push(item);
+        return acc;
+      }, {})
+    ).sort((a, b) => a.labName.localeCompare(b.labName));
+  }, [inventoryMatches, inventorySearch, labLookup]);
+
   if (!labs.length) {
     return <div className='p-6 text-center text-slate-500'>No labs available currently.</div>;
   }
@@ -52,7 +103,7 @@ export default function StudentDashboard() {
   return (
     <div className='space-y-5 pb-10'>
       <h2 className='text-xl font-semibold'>Find a lab and borrow equipment</h2>
-      <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-4'>
+      <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-3'>
         <Card title='Active Borrowings' subtitle='Pending and approved lab requests'>
           <div className='flex items-center gap-3'>
             <PackageCheck size={18} className='text-[#556b2f]' />
@@ -65,12 +116,6 @@ export default function StudentDashboard() {
             <p className='text-3xl font-semibold'>{storeAllotments.length}</p>
           </div>
         </Card>
-        <Card title='Due Soon' subtitle='Return deadlines in next 3 days'>
-          <div className='flex items-center gap-3'>
-            <Clock3 size={18} className='text-amber-600' />
-            <p className='text-3xl font-semibold'>{dueSoonStoreItems.length}</p>
-          </div>
-        </Card>
         <Card title='Overdue' subtitle='Store items past return date'>
           <div className='flex items-center gap-3'>
             <Clock3 size={18} className='text-rose-600' />
@@ -78,6 +123,77 @@ export default function StudentDashboard() {
           </div>
         </Card>
       </div>
+
+      <Card
+        title='Search Lab Inventory'
+        subtitle='Find an item across all labs. If more than one lab has it, all matching labs will be listed.'
+      >
+        <div className='flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between'>
+          <div className='max-w-2xl'>
+            <p className='text-sm text-slate-600 dark:text-slate-300'>
+              Search by item name to see which labs currently stock that inventory item.
+            </p>
+          </div>
+          <div className='w-full lg:max-w-sm'>
+            <Input
+              label='Search lab inventory'
+              value={inventorySearch}
+              onChange={(e) => setInventorySearch(e.target.value)}
+              placeholder='HCL, pipette, beaker...'
+            />
+          </div>
+        </div>
+
+        {inventorySearch.trim() ? (
+          inventorySearchGroups.length ? (
+            <div className='mt-5 space-y-4'>
+              {inventorySearchGroups.map((group) => (
+                <div key={group.labId || group.labName} className='rounded-xl border border-[#d9e1ca] px-4 py-4 dark:border-[#414a33]'>
+                  <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
+                    <div>
+                      <p className='text-base font-semibold text-[#3c4e23] dark:text-[#eef4e8]'>{group.labName}</p>
+                      <p className='text-sm text-[#71805a] dark:text-[#c5d0b5]'>
+                        {group.labCode ? `Code: ${group.labCode} • ` : ''}{group.items.length} matching item{group.items.length > 1 ? 's' : ''}
+                      </p>
+                    </div>
+                    {group.labId ? (
+                      <Button variant='outline' onClick={() => navigate(`/labs/${group.labId}`)}>
+                        <Search size={14} /> Open Lab
+                      </Button>
+                    ) : null}
+                  </div>
+
+                  <div className='mt-4 space-y-3'>
+                    {group.items.map((item) => (
+                      <div key={item.id} className='flex flex-col gap-3 rounded-xl bg-[#f7f8f1] px-4 py-3 dark:bg-[#28301f] sm:flex-row sm:items-start sm:justify-between'>
+                        <div>
+                          <p className='text-sm font-semibold text-[#3c4e23] dark:text-[#eef4e8]'>{item.name}</p>
+                          <p className='mt-1 text-xs text-[#71805a] dark:text-[#c5d0b5]'>
+                            {item.category} • Code: {item.itemCode}
+                          </p>
+                          <p className='mt-1 text-xs text-[#71805a] dark:text-[#c5d0b5]'>
+                            Storage: {item.storageLocation || 'Not specified'}
+                          </p>
+                        </div>
+                        <div className='text-left sm:text-right'>
+                          <p className='text-sm font-semibold text-[#3c4e23] dark:text-[#eef4e8]'>{item.quantity} {item.quantityUnit}</p>
+                          <p className='mt-1 text-xs text-[#71805a] dark:text-[#c5d0b5]'>
+                            {item.quantity <= (item.minThreshold || 0) ? 'Low stock' : 'Available'}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className='mt-5 rounded-xl border border-dashed border-[#cfd8bd] px-5 py-8 text-center text-[#71805a] dark:border-[#4e5d35] dark:text-[#c5d0b5]'>
+              No lab inventory matched your search.
+            </div>
+          )
+        ) : null}
+      </Card>
 
       <div className='grid gap-4 sm:grid-cols-2 xl:grid-cols-3'>
         {labs.map((lab) => (

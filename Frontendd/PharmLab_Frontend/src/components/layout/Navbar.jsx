@@ -17,10 +17,11 @@ export default function Navbar({ onToggleSidebar, isDark, toggleTheme }) {
     const lowStockItems = inventory.filter((item) => Number(item.quantity || 0) <= Number(item.minThreshold || 5));
     const pendingTransactions = transactions.filter((tx) => tx.status === 'pending');
     const recentTransactions = transactions.slice(0, 3);
+    const canSeeInventoryAlerts = user?.role === 'lab-admin' || user?.role === 'super-admin';
 
     const items = [];
 
-    if (lowStockItems.length) {
+    if (canSeeInventoryAlerts && lowStockItems.length) {
       items.push({
         id: 'low-stock',
         title: 'Low stock alert',
@@ -45,7 +46,7 @@ export default function Navbar({ onToggleSidebar, isDark, toggleTheme }) {
     });
 
     return items.slice(0, 5);
-  }, [inventory, transactions]);
+  }, [inventory, transactions, user?.role]);
 
   return (
     <header className='sticky top-0 z-30 border-b border-[#d9e1ca] bg-[#fffef8]/92 backdrop-blur-md dark:border-[#3c452f] dark:bg-[#1c2117]/92'>

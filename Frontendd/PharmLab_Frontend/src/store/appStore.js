@@ -29,6 +29,9 @@ const normalizeUser = (user) => ({
 const normalizeInventoryItem = (item) => ({
   ...item,
   id: item._id || item.id,
+  labId: item.labId?._id || item.labId || null,
+  labName: item.labId?.labName || item.labName || '',
+  labCode: item.labId?.labCode || item.labCode || '',
   itemCode: item.itemCode || '',
   name: item.name || item.itemName || 'Unnamed Item',
   category: item.category || 'General',
@@ -218,6 +221,19 @@ const useAppStore = create((set) => ({
       set({ inventory: [], loading: false });
     }
   },
+  fetchInventorySearch: async (itemName) => {
+    set({ loading: true });
+    try {
+      const query = `/inventory?itemName=${encodeURIComponent(itemName)}&limit=100`;
+      const { data } = await api.get(query);
+      const inventory = (getPayload(data) || []).map(normalizeInventoryItem);
+      set({ loading: false });
+      return inventory;
+    } catch {
+      set({ loading: false });
+      return [];
+    }
+  },
   fetchStoreItems: async (filters = {}) => {
     set({ loading: true });
     try {
@@ -346,6 +362,20 @@ const useAppStore = create((set) => ({
   setFilters: (payload) => set((state) => ({ filters: { ...state.filters, ...payload } })),
   setToast: (toast) => set({ toast }),
   removeToast: () => set({ toast: null }),
+  resetAppState: () =>
+    set({
+      labs: [],
+      users: [],
+      inventory: [],
+      storeItems: [],
+      storeAllotments: [],
+      transactions: [],
+      activityLogs: [],
+      loading: false,
+      filters: { search: '', lab: 'All' },
+      toast: null,
+      highlight: null,
+    }),
   setHighlight: (id) => {
     set({ highlight: id });
     setTimeout(() => set({ highlight: null }), 1000);

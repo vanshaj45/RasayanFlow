@@ -17,6 +17,7 @@ export default function StudentLabDetail() {
   const [borrowOpen, setBorrowOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [inventorySearch, setInventorySearch] = useState('');
   const [borrowForm, setBorrowForm] = useState({
     quantity: '',
     purpose: '',
@@ -48,13 +49,24 @@ export default function StudentLabDetail() {
     [id, labs]
   );
 
-  const rows = inventory.map((item) => ({
-    ...item,
-    id: item.id || item._id,
-    quantityDisplay: `${item.quantity} ${item.quantityUnit || 'units'}`,
-    expiryDisplay: item.expiryDate ? new Date(item.expiryDate).toLocaleDateString() : 'N/A',
-    storageDisplay: item.storageLocation || 'Not specified'
-  }));
+  const rows = useMemo(() => {
+    const query = inventorySearch.trim().toLowerCase();
+    const filtered = query
+      ? inventory.filter((item) =>
+          [item.name, item.itemCode, item.category, item.storageLocation]
+            .filter(Boolean)
+            .some((value) => value.toLowerCase().includes(query))
+        )
+      : inventory;
+
+    return filtered.map((item) => ({
+      ...item,
+      id: item.id || item._id,
+      quantityDisplay: `${item.quantity} ${item.quantityUnit || 'units'}`,
+      expiryDisplay: item.expiryDate ? new Date(item.expiryDate).toLocaleDateString() : 'N/A',
+      storageDisplay: item.storageLocation || 'Not specified'
+    }));
+  }, [inventory, inventorySearch]);
 
   const myRequests = useMemo(
     () => transactions.filter((tx) => String(tx.labId) === String(id) || String(tx.labId?._id) === String(id)),
@@ -124,7 +136,20 @@ export default function StudentLabDetail() {
       </div>
 
       <div>
-        <h3 className='mb-3 text-lg font-semibold'>Available Inventory</h3>
+        <div className='mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between'>
+          <div>
+            <h3 className='text-lg font-semibold'>Available Inventory</h3>
+            <p className='text-sm text-[#71805a] dark:text-[#c5d0b5]'>Search within this lab by item name, code, category, or storage.</p>
+          </div>
+          <div className='w-full sm:max-w-sm'>
+            <Input
+              label='Search this lab'
+              value={inventorySearch}
+              onChange={(e) => setInventorySearch(e.target.value)}
+              placeholder='Diazepam, DIAZ-10, sedatives...'
+            />
+          </div>
+        </div>
         <Table
           headers={[
             { key: 'name', label: 'Item' },

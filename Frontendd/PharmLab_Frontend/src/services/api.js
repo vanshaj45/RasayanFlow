@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getToken, destroyToken } from '../utils/auth';
+import { getToken, clearAuthSession } from '../utils/auth';
 import { navigate } from '../utils/navigate';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5000';
@@ -22,7 +22,7 @@ api.interceptors.response.use(
   (error) => {
     const status = error?.response?.status;
     if (status === 401) {
-      destroyToken();
+      clearAuthSession();
       navigate('/login');
     }
     return Promise.reject(error);
