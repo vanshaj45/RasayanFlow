@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, Navigate, useLocation } from 'react-router-dom';
 import useAuthStore from './store/authStore';
 import useAppStore from './store/appStore';
 import Sidebar from './components/layout/Sidebar';
@@ -17,6 +17,16 @@ import StudentStorePage from './pages/StudentStorePage';
 import NotFound from './pages/NotFound';
 import socket from './services/socket';
 import './index.css';
+
+function normalizePathname(pathname) {
+  const collapsedPath = pathname.replace(/\/{2,}/g, '/');
+
+  if (collapsedPath.length > 1) {
+    return collapsedPath.replace(/\/+$/, '');
+  }
+
+  return collapsedPath || '/';
+}
 
 function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 768 : false));
@@ -105,8 +115,15 @@ function App() {
 
   const role = user?.role || 'student';
 
-  return (
-    <Router>
+  function AppRoutes() {
+    const location = useLocation();
+    const normalizedPathname = normalizePathname(location.pathname);
+
+    if (normalizedPathname !== location.pathname) {
+      return <Navigate to={`${normalizedPathname}${location.search}${location.hash}`} replace />;
+    }
+
+    return (
       <Routes>
         <Route path='/login' element={user ? <Navigate to='/' replace /> : <LoginPage />} />
         <Route path='/register' element={user ? <Navigate to='/' replace /> : <RegisterPage />} />
@@ -145,6 +162,12 @@ function App() {
           )}
         />
       </Routes>
+    );
+  }
+
+  return (
+    <Router>
+      <AppRoutes />
     </Router>
   );
 }
