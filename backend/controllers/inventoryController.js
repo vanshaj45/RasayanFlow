@@ -167,6 +167,7 @@ const getInventory = asyncHandler(async (req, res) => {
 
   const total = await Inventory.countDocuments(criteria);
   const items = await Inventory.find(criteria)
+    .populate('labId', 'labName labCode')
     .skip((Number(page) - 1) * Number(limit))
     .limit(Number(limit))
     .sort({ lastUpdated: -1 });

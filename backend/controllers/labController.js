@@ -1,6 +1,8 @@
 const asyncHandler = require('express-async-handler');
 const Lab = require('../models/Lab');
 const User = require('../models/User');
+const Inventory = require('../models/Inventory');
+const Transaction = require('../models/Transaction');
 const ActivityLog = require('../models/ActivityLog');
 
 const createLab = asyncHandler(async (req, res) => {
@@ -108,4 +110,54 @@ const approveAdmin = asyncHandler(async (req, res) => {
   res.json({ success: true, data: admin });
 });
 
-module.exports = { createLab, listLabs, assignAdmin, removeAdmin, approveAdmin };
+const deleteLab = asyncHandler(async (req, res) => {
+  const { labId } = req.params;
+
+  const lab = await Lab.findById(labId).populate('admins', 'email');
+  if (!lab) {
+    res.status(404);
+    throw new Error('Lab not found');
+  }
+
+  const linkedUsers = await User.find({ labId: lab._id });
+  const linkedUserIds = linkedUsers.map((user) => user._id);
+  const inventoryItemIds = await Inventory.find({ labId: lab._id }).distinct('_id');
+
+  await Promise.all([
+    Inventory.deleteMany({ labId: lab._id }),
+    Transaction.deleteMany({
+      $or: [
+        { labId: lab._id },
+        { itemId: { $in: inventoryItemIds } },
+      ],
+    }),
+    User.updateMany(
+      { _id: { $in: linkedUserIds } },
+      [
+        {
+          $set: {
+            labId: null,
+            role: {
+              $cond: [{ $eq: ['$role', 'labAdmin'] }, 'student', '$role'],
+            },
+            isApproved: {
+              $cond: [{ $eq: ['$role', 'labAdmin'] }, false, '$isApproved'],
+            },
+          },
+        },
+      ],
+    ),
+  ]);
+
+  await lab.deleteOne();
+
+  await ActivityLog.create({
+    userId: req.user._id,
+    action: 'delete_lab',
+    details: `Deleted lab ${lab.labName} (${lab.labCode})`,
+  });
+
+  res.json({ success: true, message: 'Lab deleted successfully' });
+});
+
+module.exports = { createLab, listLabs, assignAdmin, removeAdmin, approveAdmin, deleteLab };

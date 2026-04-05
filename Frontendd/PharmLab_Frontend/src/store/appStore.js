@@ -29,6 +29,9 @@ const normalizeUser = (user) => ({
 const normalizeInventoryItem = (item) => ({
   ...item,
   id: item._id || item.id,
+  labId: item.labId?._id || item.labId || null,
+  labName: item.labId?.labName || item.labName || '',
+  labCode: item.labId?.labCode || item.labCode || '',
   itemCode: item.itemCode || '',
   name: item.name || item.itemName || 'Unnamed Item',
   category: item.category || 'General',
@@ -120,6 +123,24 @@ const useAppStore = create((set) => ({
     const createdLab = normalizeLab(getPayload(data));
     set((state) => ({ labs: [createdLab, ...state.labs] }));
     return createdLab;
+  },
+  deleteLab: async (labId) => {
+    await api.delete(`/labs/${labId}`);
+    set((state) => ({
+      labs: state.labs.filter((lab) => lab.id !== labId),
+      users: state.users.map((user) =>
+        user.labId === labId
+          ? {
+              ...user,
+              labId: null,
+              role: user.role === 'lab-admin' ? 'student' : user.role,
+              isApproved: user.role === 'lab-admin' ? false : user.isApproved,
+            }
+          : user
+      ),
+      inventory: state.inventory.filter((item) => item.labId !== labId),
+      transactions: state.transactions.filter((tx) => String(tx.labId) !== String(labId) && String(tx.labId?._id) !== String(labId)),
+    }));
   },
   createInventoryItem: async ({ labId, itemCode, name, category, quantity, quantityUnit, minThreshold = 5, storageLocation = '', lotNumber = '', expiryDate = '' }) => {
     const response = await api.post('/inventory', {
@@ -216,6 +237,19 @@ const useAppStore = create((set) => ({
       set({ inventory, loading: false });
     } catch {
       set({ inventory: [], loading: false });
+    }
+  },
+  fetchInventorySearch: async (itemName) => {
+    set({ loading: true });
+    try {
+      const query = `/inventory?itemName=${encodeURIComponent(itemName)}&limit=100`;
+      const { data } = await api.get(query);
+      const inventory = (getPayload(data) || []).map(normalizeInventoryItem);
+      set({ loading: false });
+      return inventory;
+    } catch {
+      set({ loading: false });
+      return [];
     }
   },
   fetchStoreItems: async (filters = {}) => {
@@ -346,6 +380,20 @@ const useAppStore = create((set) => ({
   setFilters: (payload) => set((state) => ({ filters: { ...state.filters, ...payload } })),
   setToast: (toast) => set({ toast }),
   removeToast: () => set({ toast: null }),
+  resetAppState: () =>
+    set({
+      labs: [],
+      users: [],
+      inventory: [],
+      storeItems: [],
+      storeAllotments: [],
+      transactions: [],
+      activityLogs: [],
+      loading: false,
+      filters: { search: '', lab: 'All' },
+      toast: null,
+      highlight: null,
+    }),
   setHighlight: (id) => {
     set({ highlight: id });
     setTimeout(() => set({ highlight: null }), 1000);

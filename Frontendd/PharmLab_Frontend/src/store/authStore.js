@@ -1,6 +1,7 @@
 import create from 'zustand';
 import api from '../services/api';
-import { saveToken, saveUser, destroyToken, getUser, getToken } from '../utils/auth';
+import useAppStore from './appStore';
+import { saveToken, saveUser, clearAuthSession, onAuthCleared, getUser, getToken } from '../utils/auth';
 
 const initial = {
   initialized: false,
@@ -8,6 +9,14 @@ const initial = {
   token: null,
   loading: false,
   error: null
+};
+
+const clearedAuthState = {
+  user: null,
+  token: null,
+  loading: false,
+  error: null,
+  initialized: true,
 };
 
 const normalizeRole = (role) => {
@@ -58,8 +67,7 @@ const useAuthStore = create((set) => ({
     }
   },
   logout: () => {
-    destroyToken();
-    set({ user: null, token: null, initialized: false });
+    clearAuthSession();
   },
   ensureAuth: async () => {
     const cachedUser = normalizeUser(getUser());
@@ -78,10 +86,17 @@ const useAuthStore = create((set) => ({
       saveUser(user);
       set({ user, token, initialized: true, error: null });
     } catch {
-      destroyToken();
-      set({ user: null, token: null, initialized: true });
+      clearAuthSession();
+      set(clearedAuthState);
     }
   }
 }));
+
+if (typeof window !== 'undefined') {
+  onAuthCleared(() => {
+    useAuthStore.setState(clearedAuthState);
+    useAppStore.getState().resetAppState();
+  });
+}
 
 export default useAuthStore;
