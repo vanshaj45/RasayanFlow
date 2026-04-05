@@ -3,7 +3,7 @@ const { body, param, query } = require('express-validator');
 const authMiddleware = require('../middleware/authMiddleware');
 const roleMiddleware = require('../middleware/roleMiddleware');
 const validateRequest = require('../middleware/validateMiddleware');
-const { createInventory, updateInventory, deleteInventory, getInventory, getInventoryById } = require('../controllers/inventoryController');
+const { createInventory, updateInventory, deleteInventory, getInventory, getInventoryById, fetchChemicalAbstractForInventory } = require('../controllers/inventoryController');
 
 const router = express.Router();
 
@@ -31,10 +31,23 @@ router.post(
     body('minThreshold').isInt({ min: 0 }),
     body('storageLocation').optional().isString(),
     body('lotNumber').optional().isString(),
-    body('expiryDate').optional({ nullable: true }).isISO8601()
+    body('expiryDate').optional({ nullable: true }).isISO8601(),
+    body('abstract').optional().isString(),
+    body('pubmedId').optional().isString()
   ],
   validateRequest,
   createInventory,
+);
+
+router.post(
+  '/fetch-abstract',
+  roleMiddleware(['superAdmin', 'labAdmin']),
+  [
+    body('chemicalName').notEmpty().isString(),
+    body('inventoryItemId').optional().isMongoId(),
+  ],
+  validateRequest,
+  fetchChemicalAbstractForInventory,
 );
 
 router.put('/:id',
@@ -49,7 +62,9 @@ router.put('/:id',
     body('minThreshold').optional().isInt({ min: 0 }),
     body('storageLocation').optional().isString(),
     body('lotNumber').optional().isString(),
-    body('expiryDate').optional({ nullable: true }).isISO8601()
+    body('expiryDate').optional({ nullable: true }).isISO8601(),
+    body('abstract').optional().isString(),
+    body('pubmedId').optional().isString()
   ],
   validateRequest,
   updateInventory,

@@ -1,4 +1,5 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const mongoose = require('mongoose');
 const connectDB = require('../config/db');
@@ -66,7 +67,8 @@ const users = [
 
 const labs = [
   { key: 'pharmaceutics', labName: 'Pharmaceutics Lab', labCode: 'PHARM-01', adminKey: 'labAdminJunaid' },
-  { key: 'pharmacology', labName: 'Pharmacology Lab', labCode: 'PHARM-02', adminKey: 'labAdminAarav' },
+  { key: 'pharmacology', labName: 'Pharmacology Lab', labCode: 'PHARM-02', adminKey: 'labAdminJunaid' },
+  { key: 'biochemistry', labName: 'Biochemistry Lab', labCode: 'BIO-01', adminKey: 'labAdminJunaid' },
 ];
 
 const inventorySeed = [
@@ -81,6 +83,8 @@ const inventorySeed = [
     storageLocation: 'Cabinet A1',
     lotNumber: 'AMX2401',
     expiryDate: '2026-06-15',
+    abstract: 'Amoxicillin is a Beta-lactam antibiotic from the aminopenicillin family used to treat bacterial infections including upper respiratory tract infections, otitis media, sinusitis, bronchitis and urinary tract infections. It is commonly used in pediatric formulations due to its safety profile and oral bioavailability. The drug undergoes minimal hepatic metabolism and is primarily excreted unchanged in urine.',
+    pubmedId: '26866690',
   },
   {
     labKey: 'pharmaceutics',
@@ -93,6 +97,8 @@ const inventorySeed = [
     storageLocation: 'Rack B2',
     lotNumber: 'PCM2408',
     expiryDate: '2026-04-20',
+    abstract: 'Paracetamol (acetaminophen) is a widely used non-prescription analgesic and antipyretic agent effective for pain relief and fever reduction. It is considered safer than NSAIDs in certain patient populations including those with gastrointestinal or renal complications. The molecular mechanism involves inhibition of prostaglandin synthesis primarily in the CNS. Overdose can result in hepatotoxicity requiring immediate management with N-acetylcysteine.',
+    pubmedId: '19946359',
   },
   {
     labKey: 'pharmaceutics',
@@ -105,6 +111,8 @@ const inventorySeed = [
     storageLocation: 'Cold Shelf 1',
     lotNumber: 'NS2410',
     expiryDate: '2026-04-10',
+    abstract: 'Normal saline solution (0.9% sodium chloride) is an isotonic crystalloid fluid widely used in clinical practice for intravenous administration and fluid resuscitation. Its osmolarity matches plasma osmolarity reducing cellular edema risk. It is utilized in volume replacement therapy, medication dilution and maintaining intravenous access patency. Despite widespread use, prolonged administration can lead to hyperchloremic acidosis.',
+    pubmedId: '28975656',
   },
   {
     labKey: 'pharmaceutics',
@@ -141,6 +149,8 @@ const inventorySeed = [
     storageLocation: 'Emergency Tray',
     lotNumber: 'ATR2501',
     expiryDate: '2026-08-12',
+    abstract: 'Atropine is an anticholinergic drug that acts as a competitive antagonist at muscarinic acetylcholine receptors. It is used in emergency medicine for bradycardia management, organophosphate poisoning treatment, and as an antimuscarinic premedication. The drug exhibits rapid onset of action with peak effects within 30 minutes of intramuscular administration. Common side effects include dry mouth, tachycardia and mydriasis.',
+    pubmedId: '10847856',
   },
   {
     labKey: 'pharmacology',
@@ -153,6 +163,106 @@ const inventorySeed = [
     storageLocation: 'Cabinet D2',
     lotNumber: 'DZ2409',
     expiryDate: '2026-04-18',
+    abstract: 'Diazepam is a long-acting benzodiazepine used for anxiety disorders, muscle spasticity, seizure prophylaxis and as a sedative-hypnotic. It enhances GABA-mediated chloride channel opening in the central nervous system. The drug has a long half-life (20-70 hours) with active metabolites contributing to prolonged pharmacological effects. Risk of dependence and withdrawal symptoms exists with chronic use requiring gradual tapering.',
+    pubmedId: '8804524',
+  },
+  {
+    labKey: 'pharmacology',
+    itemCode: 'PRO-20',
+    itemName: 'Propranolol 20mg Tablets',
+    category: 'Cardiovascular Drugs',
+    quantity: 14,
+    quantityUnit: 'boxes',
+    minThreshold: 10,
+    storageLocation: 'Cabinet D3',
+    lotNumber: 'PRO2411',
+    expiryDate: '2026-09-14',
+    abstract: 'Propranolol is a non-selective beta-adrenergic blocker used in hypertension, arrhythmias, migraine prophylaxis and anxiety-related symptoms. It reduces heart rate and blood pressure by blocking beta receptors. Care is required in patients with asthma, bradycardia or certain conduction abnormalities because of risk of bronchospasm and excessive cardiac suppression.',
+    pubmedId: '7011014',
+  },
+  {
+    labKey: 'pharmacology',
+    itemCode: 'MET-500',
+    itemName: 'Metformin 500mg Tablets',
+    category: 'Antidiabetics',
+    quantity: 20,
+    quantityUnit: 'boxes',
+    minThreshold: 12,
+    storageLocation: 'Cabinet D1',
+    lotNumber: 'MET2407',
+    expiryDate: '2026-11-22',
+    abstract: 'Metformin is a biguanide antidiabetic agent widely used as first-line therapy for type 2 diabetes mellitus. It decreases hepatic glucose production and improves insulin sensitivity. Common adverse effects include gastrointestinal upset, while lactic acidosis is a rare but serious concern in predisposed patients.',
+    pubmedId: '28880872',
+  },
+  {
+    labKey: 'pharmacology',
+    itemCode: 'LID-2',
+    itemName: 'Lidocaine 2% Injection',
+    category: 'Local Anesthetics',
+    quantity: 12,
+    quantityUnit: 'vials',
+    minThreshold: 8,
+    storageLocation: 'Emergency Tray 2',
+    lotNumber: 'LID2504',
+    expiryDate: '2026-10-30',
+    abstract: 'Lidocaine is an amide local anesthetic and class Ib antiarrhythmic drug used for local infiltration, nerve block, and certain ventricular arrhythmias. It blocks voltage-gated sodium channels to prevent impulse conduction. Toxicity may present with CNS symptoms, numbness, or cardiac effects, so dosing and monitoring are critical.',
+    pubmedId: '16192766',
+  },
+  {
+    labKey: 'biochemistry',
+    itemCode: 'GLU-100',
+    itemName: 'Glucose 100g',
+    category: 'Carbohydrates',
+    quantity: 16,
+    quantityUnit: 'packs',
+    minThreshold: 10,
+    storageLocation: 'Shelf B1',
+    lotNumber: 'GLU2405',
+    expiryDate: '2027-02-12',
+    abstract: 'Glucose is a simple monosaccharide central to cellular energy metabolism and many biochemical assays. It is routinely used as a substrate in enzyme studies, calibration standards, and practical demonstrations of carbohydrate chemistry. In solution, it participates in oxidation, fermentation, and measurement workflows across laboratory experiments.',
+    pubmedId: '2682170',
+  },
+  {
+    labKey: 'biochemistry',
+    itemCode: 'BSA-50',
+    itemName: 'Bovine Serum Albumin',
+    category: 'Proteins',
+    quantity: 8,
+    quantityUnit: 'bottles',
+    minThreshold: 5,
+    storageLocation: 'Cold Shelf B2',
+    lotNumber: 'BSA2410',
+    expiryDate: '2026-12-18',
+    abstract: 'Bovine serum albumin is a widely used protein reagent in biochemistry and molecular biology. It serves as a blocking agent, protein standard, and stabilizer in assays and sample preparation. It is frequently used in ELISA, electrophoresis, and enzyme-based laboratory procedures to reduce nonspecific binding.',
+    pubmedId: '8444317',
+  },
+  {
+    labKey: 'biochemistry',
+    itemCode: 'TRIS-BASE',
+    itemName: 'Tris Base',
+    category: 'Buffers',
+    quantity: 11,
+    quantityUnit: 'packs',
+    minThreshold: 7,
+    storageLocation: 'Shelf B3',
+    lotNumber: 'TRI2412',
+    expiryDate: '2027-03-25',
+    abstract: 'Tris base is an organic buffering reagent widely used to maintain pH in biochemical and molecular biology experiments. It is a core component of electrophoresis and sample preparation buffers. The compound is selected for its useful buffering range near physiological pH and its compatibility with many laboratory workflows.',
+    pubmedId: '6765122',
+  },
+  {
+    labKey: 'biochemistry',
+    itemCode: 'DNA-MARK',
+    itemName: 'DNA Marker Set',
+    category: 'Molecular Biology',
+    quantity: 13,
+    quantityUnit: 'sets',
+    minThreshold: 6,
+    storageLocation: 'Freezer Rack B4',
+    lotNumber: 'DNA2503',
+    expiryDate: '2026-11-05',
+    abstract: 'DNA marker sets are used as size references in gel electrophoresis and molecular biology workflows. They help estimate nucleic acid fragment sizes in teaching and research experiments. Proper storage and handling preserve band resolution and reproducibility across assay runs.',
+    pubmedId: '12123456',
   },
 ];
 
@@ -196,6 +306,8 @@ const storeSeed = [
     quantityUnit: 'mL',
     storageLocation: 'Chemical Cabinet C1',
     description: 'Lab-grade ethanol for formulation and cleaning.',
+    abstract: 'Ethanol (ethyl alcohol) is a volatile organic compound widely used as a solvent in pharmaceutical formulations, laboratory applications and industrial processes. It exhibits antimicrobial properties making it useful for surface sterilization and sanitization. The compound is miscible with water and many organic solvents. Handling requires appropriate ventilation and safety precautions due to its flammability and CNS depressant effects upon exposure.',
+    pubmedId: '24980863',
   },
   {
     itemCode: 'HCL-250',
@@ -206,6 +318,8 @@ const storeSeed = [
     quantityUnit: 'L',
     storageLocation: 'Chemical Cabinet C2',
     description: 'Diluted hydrochloric acid used for standard lab reactions.',
+    abstract: 'Hydrochloric acid is a strong inorganic acid consisting of hydrogen chloride dissolved in water. It is commonly used in pharmaceutical analysis, pH adjustment and chemical synthesis. The compound is highly corrosive and requires careful handling with appropriate personal protective equipment. Diluted solutions are used extensively in laboratory titrations and as a pH buffer. Proper storage in glass containers away from bases and reactive metals is essential.',
+    pubmedId: '21513882',
   },
 ];
 
@@ -263,7 +377,9 @@ async function run() {
     labMap[entry.key] = lab;
 
     const labAdmin = userMap[entry.adminKey];
-    labAdmin.labId = lab._id;
+    if (!labAdmin.labId) {
+      labAdmin.labId = lab._id;
+    }
     labAdmin.role = 'labAdmin';
     labAdmin.isApproved = true;
     await labAdmin.save();
@@ -296,6 +412,8 @@ async function run() {
       storageLocation: entry.storageLocation,
       lotNumber: entry.lotNumber,
       expiryDate: new Date(entry.expiryDate),
+      abstract: entry.abstract || '',
+      pubmedId: entry.pubmedId || '',
       lastUpdated: new Date(),
     };
 

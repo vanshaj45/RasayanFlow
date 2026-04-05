@@ -4,6 +4,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const dotenv = require('dotenv');
+const path = require('path');
 const { Server } = require('socket.io');
 const connectDB = require('./config/db');
 const rateLimiter = require('./middleware/rateLimiter');
@@ -11,7 +12,7 @@ const errorHandler = require('./middleware/errorMiddleware');
 const logger = require('./utils/logger');
 const socketHandler = require('./sockets');
 
-dotenv.config();
+dotenv.config({ path: path.join(__dirname, '.env') });
 
 if (!process.env.JWT_SECRET) {
   throw new Error('Missing required environment variable: JWT_SECRET');

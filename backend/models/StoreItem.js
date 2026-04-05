@@ -9,6 +9,8 @@ const storeItemSchema = new mongoose.Schema({
   quantityUnit: { type: String, required: true, trim: true },
   storageLocation: { type: String, trim: true, default: '' },
   description: { type: String, trim: true, default: '' },
+  abstract: { type: String, trim: true, default: '' },
+  pubmedId: { type: String, trim: true, default: '' },
   lastUpdated: { type: Date, default: Date.now },
   createdAt: { type: Date, default: Date.now },
 });

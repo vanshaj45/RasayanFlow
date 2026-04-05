@@ -123,6 +123,21 @@ export default function StudentStorePage() {
                         {item.subCategory} • Code: {item.itemCode}
                       </p>
                       {item.description ? <p className='mt-2 text-sm text-slate-600 dark:text-slate-300'>{item.description}</p> : null}
+                      {item.category === 'Chemical' && item.abstract ? (
+                        <div className='mt-3 rounded-lg border border-[#d9e1ca] bg-[#f9faef] p-3 dark:border-[#414a33] dark:bg-[#1f2419]'>
+                          <p className='text-xs font-semibold uppercase text-[#556b2f] dark:text-[#b8c5a0]'>Abstract</p>
+                          <p className='mt-2 text-xs leading-relaxed text-[#3c4e23] dark:text-[#d5ddbf]'>
+                            {item.abstract.length > 300 ? `${item.abstract.substring(0, 300)}...` : item.abstract}
+                          </p>
+                          {item.pubmedId && (
+                            <p className='mt-2 text-xs text-[#71805a] dark:text-[#a8b8a0]'>
+                              <a href={`https://pubmed.ncbi.nlm.nih.gov/${item.pubmedId}`} target='_blank' rel='noopener noreferrer' className='hover:underline'>
+                                View on PubMed →
+                              </a>
+                            </p>
+                          )}
+                        </div>
+                      ) : null}
                       <div className='mt-3'>
                         <Button variant='outline' className='px-3 py-1 text-xs' onClick={() => openRequestModal(item)}>
                           <Send size={14} /> Request From Store

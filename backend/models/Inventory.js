@@ -11,6 +11,8 @@ const inventorySchema = new mongoose.Schema({
   storageLocation: { type: String, trim: true, default: '' },
   lotNumber: { type: String, trim: true, default: '' },
   expiryDate: { type: Date, default: null },
+  abstract: { type: String, trim: true, default: '' },
+  pubmedId: { type: String, trim: true, default: '' },
   lastUpdated: { type: Date, default: Date.now },
   createdAt: { type: Date, default: Date.now },
 });

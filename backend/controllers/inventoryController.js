@@ -2,6 +2,8 @@ const asyncHandler = require('express-async-handler');
 const Inventory = require('../models/Inventory');
 const ActivityLog = require('../models/ActivityLog');
 const { getIo } = require('../sockets');
+const { getChemicalAbstract } = require('../utils/pubmedService');
+const { decorateInventoryAbstract } = require('../utils/abstractFallbackService');
 
 const buildInventorySnapshot = (item) => ({
   itemCode: item.itemCode,
@@ -13,6 +15,8 @@ const buildInventorySnapshot = (item) => ({
   storageLocation: item.storageLocation || '',
   lotNumber: item.lotNumber || '',
   expiryDate: item.expiryDate || null,
+  abstract: item.abstract || '',
+  pubmedId: item.pubmedId || '',
   labId: item.labId,
 });
 
@@ -38,6 +42,8 @@ const createInventory = asyncHandler(async (req, res) => {
     storageLocation,
     lotNumber,
     expiryDate,
+    abstract,
+    pubmedId,
   } = req.body;
 
   if (!labId || !itemCode || !itemName || !category || quantity == null || !quantityUnit || minThreshold == null) {
@@ -63,6 +69,8 @@ const createInventory = asyncHandler(async (req, res) => {
     storageLocation: storageLocation?.trim() || '',
     lotNumber: lotNumber?.trim() || '',
     expiryDate: expiryDate || null,
+    abstract: abstract?.trim() || '',
+    pubmedId: pubmedId?.trim() || '',
     lastUpdated: new Date()
   });
 
@@ -75,7 +83,7 @@ const createInventory = asyncHandler(async (req, res) => {
   });
   getIo().emit('inventoryUpdated', { action: 'created', item });
 
-  res.status(201).json({ success: true, data: item });
+  res.status(201).json({ success: true, data: decorateInventoryAbstract(item) });
 });
 
 const updateInventory = asyncHandler(async (req, res) => {
@@ -114,6 +122,8 @@ const updateInventory = asyncHandler(async (req, res) => {
   if (updates.quantityUnit != null) updates.quantityUnit = String(updates.quantityUnit).trim();
   if (updates.storageLocation != null) updates.storageLocation = String(updates.storageLocation).trim();
   if (updates.lotNumber != null) updates.lotNumber = String(updates.lotNumber).trim();
+  if (updates.abstract != null) updates.abstract = String(updates.abstract).trim();
+  if (updates.pubmedId != null) updates.pubmedId = String(updates.pubmedId).trim();
   if (Object.prototype.hasOwnProperty.call(updates, 'expiryDate') && !updates.expiryDate) {
     updates.expiryDate = null;
   }
@@ -131,7 +141,7 @@ const updateInventory = asyncHandler(async (req, res) => {
   });
   getIo().emit('inventoryUpdated', { action: 'updated', item });
 
-  res.json({ success: true, data: item });
+  res.json({ success: true, data: decorateInventoryAbstract(item) });
 });
 
 const deleteInventory = asyncHandler(async (req, res) => {
@@ -172,7 +182,8 @@ const getInventory = asyncHandler(async (req, res) => {
     .limit(Number(limit))
     .sort({ lastUpdated: -1 });
 
-  res.json({ success: true, data: items, pagination: { total, page: Number(page), limit: Number(limit) } });
+  const decoratedItems = items.map((entry) => decorateInventoryAbstract(entry));
+  res.json({ success: true, data: decoratedItems, pagination: { total, page: Number(page), limit: Number(limit) } });
 });
 
 const getInventoryById = asyncHandler(async (req, res) => {
@@ -182,7 +193,49 @@ const getInventoryById = asyncHandler(async (req, res) => {
     throw new Error('Item not found');
   }
 
-  res.json({ success: true, data: item });
+  res.json({ success: true, data: decorateInventoryAbstract(item) });
 });
 
-module.exports = { createInventory, updateInventory, deleteInventory, getInventory, getInventoryById };
+const fetchChemicalAbstractForInventory = asyncHandler(async (req, res) => {
+  const { chemicalName, inventoryItemId } = req.body;
+
+  if (!chemicalName || chemicalName.trim().length === 0) {
+    res.status(400);
+    throw new Error('Chemical name is required');
+  }
+
+  try {
+    const abstractData = await getChemicalAbstract(chemicalName.trim());
+
+    // If inventoryItemId is provided, update the item with the fetched abstract
+    if (inventoryItemId && abstractData.source === 'pubmed') {
+      const item = await Inventory.findById(inventoryItemId);
+      if (item) {
+        item.abstract = abstractData.abstract;
+        item.pubmedId = abstractData.pmid;
+        item.lastUpdated = new Date();
+        await item.save();
+
+        await createAuditEntry({
+          userId: req.user._id,
+          action: 'update_abstract',
+          details: `Updated abstract for ${item.itemName} from PubMed`,
+          entityId: item._id,
+          metadata: { pmid: abstractData.pmid, source: 'pubmed' },
+        });
+
+        getIo().emit('inventoryUpdated', { action: 'updated', item });
+      }
+    }
+
+    res.json({
+      success: true,
+      data: abstractData,
+    });
+  } catch (error) {
+    res.status(500);
+    throw new Error(`Failed to fetch abstract: ${error.message}`);
+  }
+});
+
+module.exports = { createInventory, updateInventory, deleteInventory, getInventory, getInventoryById, fetchChemicalAbstractForInventory };

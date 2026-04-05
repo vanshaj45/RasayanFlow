@@ -3,7 +3,7 @@ const { body, param, query } = require('express-validator');
 const authMiddleware = require('../middleware/authMiddleware');
 const roleMiddleware = require('../middleware/roleMiddleware');
 const validateRequest = require('../middleware/validateMiddleware');
-const { listStoreItems, createStoreItem, updateStoreItem, deleteStoreItem } = require('../controllers/storeController');
+const { listStoreItems, createStoreItem, updateStoreItem, deleteStoreItem, fetchChemicalAbstract } = require('../controllers/storeController');
 
 const router = express.Router();
 
@@ -34,9 +34,22 @@ router.post(
     body('quantityUnit').optional().notEmpty(),
     body('storageLocation').optional().isString(),
     body('description').optional().isString(),
+    body('abstract').optional().isString(),
+    body('pubmedId').optional().isString(),
   ],
   validateRequest,
   createStoreItem,
+);
+
+router.post(
+  '/fetch-abstract',
+  roleMiddleware(['superAdmin', 'storeAdmin']),
+  [
+    body('chemicalName').notEmpty().isString(),
+    body('storeItemId').optional().isMongoId(),
+  ],
+  validateRequest,
+  fetchChemicalAbstract,
 );
 
 router.put(
@@ -52,6 +65,8 @@ router.put(
     body('quantityUnit').optional().notEmpty(),
     body('storageLocation').optional().isString(),
     body('description').optional().isString(),
+    body('abstract').optional().isString(),
+    body('pubmedId').optional().isString(),
   ],
   validateRequest,
   updateStoreItem,

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Download, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { jsPDF } from 'jspdf';
@@ -20,14 +20,21 @@ const EMPTY_ITEM_FORM = {
   storageLocation: '',
   lotNumber: '',
   expiryDate: '',
-  minThreshold: '5'
+  minThreshold: '5',
+  abstract: '',
+  pubmedId: ''
 };
 
 export default function LabAdminDashboard() {
-  const { inventory, users, fetchUsers, fetchInventory, transactions, fetchTransactions, createInventoryItem, updateInventoryItem, deleteInventoryItem, approveBorrowRequest, rejectBorrowRequest, setUserBlockedState, setToast, setHighlight } = useAppStore();
+  const { labs, inventory, users, fetchLabs, fetchUsers, fetchInventory, transactions, fetchTransactions, createInventoryItem, updateInventoryItem, deleteInventoryItem, approveBorrowRequest, rejectBorrowRequest, setUserBlockedState, setToast, setHighlight } = useAppStore();
   const user = useAuthStore((state) => state.user);
   const location = useLocation();
-  const labId = user?.labId;
+  const assignedLabs = useMemo(() => {
+    const currentUserId = String(user?.id || user?._id || '');
+    return labs.filter((lab) => Array.isArray(lab.admins) && lab.admins.some((admin) => String(admin.id || admin._id || admin) === currentUserId));
+  }, [labs, user]);
+  const [selectedLabId, setSelectedLabId] = useState(() => localStorage.getItem('pharmlab-active-lab') || '');
+  const labId = selectedLabId || assignedLabs[0]?.id || assignedLabs[0]?._id || user?.labId || '';
   const isTransactionsPage = location.pathname === '/transactions';
   const isAnalyticsPage = location.pathname === '/analytics';
   const [createOpen, setCreateOpen] = useState(false);
@@ -44,11 +51,28 @@ export default function LabAdminDashboard() {
   const [editItem, setEditItem] = useState(EMPTY_ITEM_FORM);
 
   useEffect(() => {
+    if (!assignedLabs.length) return;
+
+    const validSelection = assignedLabs.some((lab) => String(lab.id || lab._id) === String(selectedLabId));
+    if (!selectedLabId || !validSelection) {
+      const nextLabId = String(assignedLabs[0].id || assignedLabs[0]._id);
+      setSelectedLabId(nextLabId);
+      localStorage.setItem('pharmlab-active-lab', nextLabId);
+    }
+  }, [assignedLabs, selectedLabId]);
+
+  const currentLab = useMemo(
+    () => assignedLabs.find((entry) => String(entry.id || entry._id) === String(labId)) || labs.find((entry) => String(entry.id || entry._id) === String(labId)),
+    [assignedLabs, labId, labs]
+  );
+
+  useEffect(() => {
     if (!labId) return;
+    fetchLabs();
     fetchInventory(labId);
     fetchTransactions({ labId, itemCode: isTransactionsPage ? appliedTransactionCode : '' });
     fetchUsers();
-  }, [appliedTransactionCode, fetchInventory, fetchTransactions, fetchUsers, isTransactionsPage, labId]);
+  }, [appliedTransactionCode, fetchInventory, fetchTransactions, fetchLabs, fetchUsers, isTransactionsPage, labId]);
 
   useEffect(() => {
     if (!labId) return undefined;
@@ -168,7 +192,9 @@ export default function LabAdminDashboard() {
       storageLocation: row.storageLocation || '',
       lotNumber: row.lotNumber || '',
       expiryDate: row.expiryDate ? new Date(row.expiryDate).toISOString().slice(0, 10) : '',
-      minThreshold: String(row.minThreshold ?? 5)
+      minThreshold: String(row.minThreshold ?? 5),
+      abstract: row.abstract || '',
+      pubmedId: row.pubmedId || ''
     });
     setEditOpen(true);
   };
@@ -236,7 +262,9 @@ export default function LabAdminDashboard() {
         storageLocation: newItem.storageLocation.trim(),
         lotNumber: newItem.lotNumber.trim(),
         expiryDate: newItem.expiryDate,
-        minThreshold: newItem.minThreshold || 5
+        minThreshold: newItem.minThreshold || 5,
+        abstract: newItem.abstract?.trim() || '',
+        pubmedId: newItem.pubmedId?.trim() || ''
       });
       setToast({ type: 'success', message: `${item.name} added` });
       setHighlight(item.id);
@@ -263,7 +291,9 @@ export default function LabAdminDashboard() {
         storageLocation: editItem.storageLocation.trim(),
         lotNumber: editItem.lotNumber.trim(),
         expiryDate: editItem.expiryDate || null,
-        minThreshold: Number(editItem.minThreshold || 5)
+        minThreshold: Number(editItem.minThreshold || 5),
+        abstract: editItem.abstract?.trim() || '',
+        pubmedId: editItem.pubmedId?.trim() || ''
       });
       setToast({ type: 'success', message: `${updatedItem.name} updated` });
       setHighlight(updatedItem.id);
@@ -463,12 +493,43 @@ export default function LabAdminDashboard() {
 
   return (
     <div className='space-y-6 pb-10'>
-      {!labId ? (
+      {!assignedLabs.length ? (
         <Card title='Lab Not Assigned' subtitle='This lab admin account is not linked to a lab yet'>
           <p className='text-sm text-slate-500 dark:text-slate-400'>Ask the super admin to assign this account to a lab from the Manage dialog.</p>
         </Card>
       ) : (
         <>
+          <div className='rounded-xl border border-[#d9e1ca] bg-[#f9faef] px-4 py-3 dark:border-[#414a33] dark:bg-[#1f2419]'>
+            <div className='flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between'>
+              <div>
+                <p className='text-sm font-medium text-[#3c4e23] dark:text-[#eef4e8]'>
+                  You are admin of {assignedLabs.length} lab{assignedLabs.length > 1 ? 's' : ''}
+                </p>
+                <p className='mt-1 text-xs text-[#71805a] dark:text-[#c5d0b5]'>
+                  Current dashboard: {currentLab?.name || 'Assigned Lab'}{currentLab?.labCode ? ` (${currentLab.labCode})` : ''}
+                </p>
+              </div>
+              <div className='flex flex-wrap gap-2'>
+                {assignedLabs.map((lab) => {
+                  const labKey = String(lab.id || lab._id);
+                  const isActive = labKey === String(labId);
+                  return (
+                    <Button
+                      key={labKey}
+                      variant={isActive ? 'primary' : 'outline'}
+                      className='px-3 py-1 text-xs'
+                      onClick={() => {
+                        setSelectedLabId(labKey);
+                        localStorage.setItem('pharmlab-active-lab', labKey);
+                      }}
+                    >
+                      {lab.labName || lab.name || 'Lab'}{lab.labCode ? ` • ${lab.labCode}` : ''}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
           <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-4'>
             <Card title='Inventory Value' subtitle='Real-time items'>
               <p className='text-3xl font-semibold'>{inventory.length}</p>
@@ -849,6 +910,18 @@ export default function LabAdminDashboard() {
           </div>
           <Input label='Expiry date' type='date' value={newItem.expiryDate} onChange={(e) => setNewItem((s) => ({ ...s, expiryDate: e.target.value }))} />
           <Input label='Low stock threshold' type='number' value={newItem.minThreshold} onChange={(e) => setNewItem((s) => ({ ...s, minThreshold: e.target.value }))} />
+          <div className='rounded-lg border border-[#d9e1ca] bg-[#f9faef] p-3 dark:border-[#414a33] dark:bg-[#1f2419]'>
+            <p className='text-xs font-semibold uppercase text-[#556b2f] dark:text-[#b8c5a0]'>PubMed Information (Optional)</p>
+            <p className='mt-1 text-xs text-[#71805a] dark:text-[#a8b8a0]'>Use for chemical/drug items. Leave empty for non-chemical items.</p>
+          </div>
+          <Input label='PubMed ID' value={newItem.pubmedId} onChange={(e) => setNewItem((s) => ({ ...s, pubmedId: e.target.value }))} placeholder='e.g., 12345678' />
+          <textarea
+            placeholder='Chemical abstract (you can paste from PubMed or enter manually)'
+            value={newItem.abstract}
+            onChange={(e) => setNewItem((s) => ({ ...s, abstract: e.target.value }))}
+            className='w-full rounded-lg border border-[#cfd8bd] bg-[#fffef8] px-3 py-2 text-[#3c4e23] text-sm transition focus:outline-none focus:ring-2 focus:ring-[#6f7d45] dark:border-[#4e5d35] dark:bg-[#20251a] dark:text-[#eef4e8]'
+            rows={4}
+          />
           <Button className='w-full' onClick={addItem} disabled={savingItem || !labId || duplicateCodeExists}>
             {savingItem ? 'Saving...' : 'Save item'}
           </Button>
@@ -882,6 +955,18 @@ export default function LabAdminDashboard() {
           </div>
           <Input label='Expiry date' type='date' value={editItem.expiryDate} onChange={(e) => setEditItem((s) => ({ ...s, expiryDate: e.target.value }))} />
           <Input label='Low stock threshold' type='number' value={editItem.minThreshold} onChange={(e) => setEditItem((s) => ({ ...s, minThreshold: e.target.value }))} />
+          <div className='rounded-lg border border-[#d9e1ca] bg-[#f9faef] p-3 dark:border-[#414a33] dark:bg-[#1f2419]'>
+            <p className='text-xs font-semibold uppercase text-[#556b2f] dark:text-[#b8c5a0]'>PubMed Information (Optional)</p>
+            <p className='mt-1 text-xs text-[#71805a] dark:text-[#a8b8a0]'>Use for chemical/drug items. Leave empty for non-chemical items.</p>
+          </div>
+          <Input label='PubMed ID' value={editItem.pubmedId} onChange={(e) => setEditItem((s) => ({ ...s, pubmedId: e.target.value }))} placeholder='e.g., 12345678' />
+          <textarea
+            placeholder='Chemical abstract (you can paste from PubMed or enter manually)'
+            value={editItem.abstract}
+            onChange={(e) => setEditItem((s) => ({ ...s, abstract: e.target.value }))}
+            className='w-full rounded-lg border border-[#cfd8bd] bg-[#fffef8] px-3 py-2 text-[#3c4e23] text-sm transition focus:outline-none focus:ring-2 focus:ring-[#6f7d45] dark:border-[#4e5d35] dark:bg-[#20251a] dark:text-[#eef4e8]'
+            rows={4}
+          />
           <Button className='w-full' onClick={saveEditedItem} disabled={savingEdit}>
             {savingEdit ? 'Saving...' : 'Save changes'}
           </Button>

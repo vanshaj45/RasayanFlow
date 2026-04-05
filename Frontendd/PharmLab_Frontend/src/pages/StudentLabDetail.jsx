@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, FlaskConical, Package } from 'lucide-react';
+import { ArrowLeft, FlaskConical, Package, Info, ExternalLink } from 'lucide-react';
 import useAppStore from '../store/appStore';
 import useAuthStore from '../store/authStore';
 import Card from '../components/ui/Card';
@@ -8,6 +8,55 @@ import Table from '../components/ui/Table';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
+
+const CHEMICAL_HINTS = ['chemical', 'acid', 'base', 'solvent', 'reagent', 'drug', 'antibiotic', 'analgesic', 'sedative', 'iv fluid', 'emergency'];
+
+const isChemicalLike = (item) => {
+  const combined = `${item?.category || ''} ${item?.name || item?.itemName || ''}`.toLowerCase();
+  return CHEMICAL_HINTS.some((hint) => combined.includes(hint));
+};
+
+const buildAiFallbackAbstract = (item) => {
+  if (!isChemicalLike(item)) return '';
+
+  const itemName = item?.name || item?.itemName || 'This chemical';
+  const category = item?.category || 'chemical';
+  const storage = item?.storageLocation || 'designated storage';
+  const quantity = Number(item?.quantity || 0);
+  const quantityUnit = item?.quantityUnit || 'units';
+  const lowerName = itemName.toLowerCase();
+
+  let useCase = 'used for supervised laboratory learning, demonstration, and controlled handling.';
+  let precautions = 'Wear appropriate PPE, keep the container closed, and use only under supervision.';
+  let avoid = 'Avoid direct contact, inhalation, and incompatible mixing unless a protocol allows it.';
+
+  if (lowerName.includes('acid')) {
+    useCase = 'used for pH adjustment, titration work, cleaning protocols, and controlled reaction studies.';
+    precautions = 'Wear gloves, eye protection, and a lab coat; handle in a ventilated area and add acid to water, not the reverse.';
+    avoid = 'Avoid skin and eye contact, incompatible bases, metals, and uncontrolled dilution.';
+  } else if (lowerName.includes('solvent') || lowerName.includes('ethanol')) {
+    useCase = 'used as a solvent for preparation, extraction, cleaning, and sample handling in laboratory work.';
+    precautions = 'Keep away from heat and ignition sources and work in a well-ventilated area.';
+    avoid = 'Avoid open flames, sparks, and strong oxidizers unless a protocol explicitly permits it.';
+  } else if (lowerName.includes('antibiotic')) {
+    useCase = 'used in laboratory and teaching settings to study antimicrobial handling, dosage, and formulation concepts.';
+    precautions = 'Handle carefully, follow the approved protocol, and use sterile technique where required.';
+    avoid = 'Avoid unauthorized use, contamination, and application outside approved instruction or clinical protocol.';
+  } else if (lowerName.includes('sedative') || lowerName.includes('diazepam')) {
+    useCase = 'used in pharmacology teaching to demonstrate controlled drug handling, dosing concepts, and safety procedures.';
+    precautions = 'Treat as a controlled medicine, keep access restricted, and document every use.';
+    avoid = 'Avoid unauthorized handling, sharing, or use outside approved supervision and recordkeeping.';
+  }
+
+  return [
+    `AI-generated summary: ${itemName} is a ${category} item used in educational laboratory workflows.`,
+    `It is ${useCase}`,
+    `Current recorded stock is ${quantity} ${quantityUnit}, stored at ${storage}.`,
+    `Precautions: ${precautions}`,
+    `Avoid: ${avoid}`,
+    'This summary is generated automatically because no admin or PubMed abstract is available; verify with official references before critical use.',
+  ].join(' ');
+};
 
 export default function StudentLabDetail() {
   const { id } = useParams();
@@ -18,54 +67,49 @@ export default function StudentLabDetail() {
   const [selectedItem, setSelectedItem] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [inventorySearch, setInventorySearch] = useState('');
+  const [expandedAbstract, setExpandedAbstract] = useState(null);
   const [borrowForm, setBorrowForm] = useState({
     quantity: '',
     purpose: '',
     neededUntil: '',
-    notes: ''
+    notes: '',
   });
 
   useEffect(() => {
     fetchLabs();
     fetchTransactions();
-    if (id) {
-      fetchInventory(id);
-    }
-  }, [fetchInventory, fetchLabs, fetchTransactions, id]);
+    if (id) fetchInventory(id);
+  }, [fetchLabs, fetchTransactions, fetchInventory, id]);
 
   useEffect(() => {
     const intervalId = setInterval(() => {
       fetchTransactions();
-      if (id) {
-        fetchInventory(id);
-      }
+      if (id) fetchInventory(id);
     }, 5000);
 
     return () => clearInterval(intervalId);
-  }, [fetchInventory, fetchTransactions, id]);
+  }, [fetchTransactions, fetchInventory, id]);
 
-  const lab = useMemo(
-    () => labs.find((entry) => (entry.id || entry._id) === id),
-    [id, labs]
-  );
+  const lab = useMemo(() => labs.find((entry) => String(entry.id || entry._id) === String(id)), [id, labs]);
 
   const rows = useMemo(() => {
     const query = inventorySearch.trim().toLowerCase();
     const filtered = query
-      ? inventory.filter((item) =>
-          [item.name, item.itemCode, item.category, item.storageLocation]
-            .filter(Boolean)
-            .some((value) => value.toLowerCase().includes(query))
-        )
+      ? inventory.filter((item) => [item.name, item.itemCode, item.category, item.storageLocation].filter(Boolean).some((value) => value.toLowerCase().includes(query)))
       : inventory;
 
-    return filtered.map((item) => ({
-      ...item,
-      id: item.id || item._id,
-      quantityDisplay: `${item.quantity} ${item.quantityUnit || 'units'}`,
-      expiryDisplay: item.expiryDate ? new Date(item.expiryDate).toLocaleDateString() : 'N/A',
-      storageDisplay: item.storageLocation || 'Not specified'
-    }));
+    return filtered.map((item) => {
+      const fallbackAbstract = buildAiFallbackAbstract(item);
+      return {
+        ...item,
+        id: item.id || item._id,
+        quantityDisplay: `${item.quantity} ${item.quantityUnit || 'units'}`,
+        expiryDisplay: item.expiryDate ? new Date(item.expiryDate).toLocaleDateString() : 'N/A',
+        storageDisplay: item.storageLocation || 'Not specified',
+        displayAbstract: item.displayAbstract || item.abstract || fallbackAbstract,
+        isAiGenerated: Boolean(item.isAiGenerated || (!item.displayAbstract && !item.abstract && fallbackAbstract)),
+      };
+    });
   }, [inventory, inventorySearch]);
 
   const myRequests = useMemo(
@@ -75,12 +119,7 @@ export default function StudentLabDetail() {
 
   const openBorrowModal = (item) => {
     setSelectedItem(item);
-    setBorrowForm({
-      quantity: '',
-      purpose: '',
-      neededUntil: '',
-      notes: ''
-    });
+    setBorrowForm({ quantity: '', purpose: '', neededUntil: '', notes: '' });
     setBorrowOpen(true);
   };
 
@@ -94,7 +133,7 @@ export default function StudentLabDetail() {
         quantity: borrowForm.quantity,
         purpose: borrowForm.purpose.trim(),
         neededUntil: borrowForm.neededUntil,
-        notes: borrowForm.notes.trim()
+        notes: borrowForm.notes.trim(),
       });
       setToast({ type: 'success', message: 'Borrow request submitted for admin approval.' });
       setBorrowOpen(false);
@@ -109,7 +148,7 @@ export default function StudentLabDetail() {
     <div className='space-y-6 pb-10'>
       <div className='flex items-center justify-between gap-3'>
         <div>
-          <Button variant='outline' onClick={() => navigate('/')} className='mb-3 text-xs px-3 py-1'>
+          <Button variant='outline' onClick={() => navigate('/')} className='mb-3 px-3 py-1 text-xs'>
             <ArrowLeft size={14} className='mr-2' /> Back to labs
           </Button>
           <h2 className='text-2xl font-semibold'>{lab?.name || 'Lab Inventory'}</h2>
@@ -150,6 +189,7 @@ export default function StudentLabDetail() {
             />
           </div>
         </div>
+
         <Table
           headers={[
             { key: 'name', label: 'Item' },
@@ -161,20 +201,77 @@ export default function StudentLabDetail() {
               key: 'actions',
               label: 'Actions',
               render: (row) => (
-                <Button variant='outline' onClick={() => openBorrowModal(row)} className='text-xs px-3 py-1'>
-                  Request Borrow
-                </Button>
-              )
-            }
+                <div className='flex items-center gap-2'>
+                  <Button variant='outline' onClick={() => openBorrowModal(row)} className='px-3 py-1 text-xs'>
+                    Request Borrow
+                  </Button>
+                  {row.displayAbstract && (
+                    <button
+                      onClick={() => setExpandedAbstract(expandedAbstract === row.id ? null : row.id)}
+                      className='inline-flex items-center justify-center rounded-lg p-1.5 transition hover:bg-[#edf1e3] dark:hover:bg-[#28301f]'
+                      title='View chemical information'
+                    >
+                      <Info size={18} className='text-[#556b2f] dark:text-[#b8c5a0]' />
+                    </button>
+                  )}
+                </div>
+              ),
+            },
           ]}
           rows={rows}
+          expandedRowId={expandedAbstract}
+          renderExpandedRow={(row) => (
+            <div className='rounded-lg border border-[#d9e1ca] bg-[#f9faef] p-4 dark:border-[#414a33] dark:bg-[#1f2419]'>
+              <div className='mb-3 flex items-start justify-between gap-3'>
+                <div>
+                  <p className='text-sm font-semibold text-[#3c4e23] dark:text-[#eef4e8]'>{row.name}</p>
+                  <p className='mt-1 text-xs text-[#71805a] dark:text-[#c5d0b5]'>{row.isAiGenerated ? 'AI-generated chemical summary' : 'Chemical information'}</p>
+                </div>
+                <button onClick={() => setExpandedAbstract(null)} className='text-[#71805a] hover:text-[#3c4e23] dark:text-[#a8b8a0] dark:hover:text-[#eef4e8]'>
+                  ✕
+                </button>
+              </div>
+              <div className='border-t border-[#d9e1ca] pt-3 dark:border-[#414a33]'>
+                <p className='mb-2 text-xs font-semibold uppercase text-[#556b2f] dark:text-[#b8c5a0]'>Abstract</p>
+                <p className='text-sm leading-relaxed text-[#3c4e23] dark:text-[#d5ddbf]'>{row.displayAbstract}</p>
+                {row.isAiGenerated && <p className='mt-2 text-xs font-medium text-amber-700 dark:text-amber-300'>Source: AI-generated fallback (admin abstract not provided)</p>}
+                {row.pubmedId && (
+                  <a
+                    href={`https://pubmed.ncbi.nlm.nih.gov/${row.pubmedId}`}
+                    target='_blank'
+                    rel='noopener noreferrer'
+                    className='mt-3 inline-flex items-center gap-1 text-xs text-[#556b2f] transition hover:text-[#3c4e23] dark:text-[#b8c5a0] dark:hover:text-[#eef4e8]'
+                  >
+                    <ExternalLink size={14} /> Read full article on PubMed
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
         />
       </div>
+
       <Modal open={borrowOpen} onClose={() => setBorrowOpen(false)} title={selectedItem ? `Borrow Request: ${selectedItem.name}` : 'Borrow Request'}>
         <div className='space-y-4'>
           <div className='rounded-xl bg-[#f4f5eb] p-3 text-sm text-[#556b2f] dark:bg-[#28301f] dark:text-[#d5ddbf]'>
             Available quantity: {selectedItem?.quantity} {selectedItem?.quantityUnit || 'units'}
           </div>
+          {selectedItem?.displayAbstract && (
+            <div className='rounded-lg border border-[#d9e1ca] bg-[#f9faef] p-3 dark:border-[#414a33] dark:bg-[#1f2419]'>
+              <p className='text-xs font-semibold uppercase text-[#556b2f] dark:text-[#b8c5a0]'>About this chemical</p>
+              <p className='mt-2 text-xs leading-relaxed text-[#3c4e23] dark:text-[#d5ddbf]'>
+                {selectedItem.displayAbstract.length > 400 ? `${selectedItem.displayAbstract.substring(0, 400)}...` : selectedItem.displayAbstract}
+              </p>
+              {selectedItem.isAiGenerated && <p className='mt-2 text-xs font-medium text-amber-700 dark:text-amber-300'>Source: AI-generated fallback (admin abstract not provided)</p>}
+              {selectedItem.pubmedId && (
+                <p className='mt-2 text-xs text-[#71805a] dark:text-[#a8b8a0]'>
+                  <a href={`https://pubmed.ncbi.nlm.nih.gov/${selectedItem.pubmedId}`} target='_blank' rel='noopener noreferrer' className='hover:underline'>
+                    View full research on PubMed →
+                  </a>
+                </p>
+              )}
+            </div>
+          )}
           <div className='grid gap-4 sm:grid-cols-2'>
             <Input label='Quantity requested' type='number' value={borrowForm.quantity} onChange={(e) => setBorrowForm((state) => ({ ...state, quantity: e.target.value }))} />
             <Input label='Requested in unit' value={selectedItem?.quantityUnit || 'units'} readOnly className='bg-[#f4f5eb] dark:bg-[#28301f]' />
@@ -191,6 +288,7 @@ export default function StudentLabDetail() {
           </Button>
         </div>
       </Modal>
+
       <div>
         <h3 className='mb-3 text-lg font-semibold'>My Borrow Requests</h3>
         <Table
@@ -214,13 +312,13 @@ export default function StudentLabDetail() {
                 }`}>
                   {row.status}
                 </span>
-              )
-            }
+              ),
+            },
           ]}
           rows={myRequests.map((tx) => ({
             ...tx,
             quantityDisplay: `${tx.quantity} ${tx.itemId?.quantityUnit || ''}`.trim(),
-            neededUntilDisplay: tx.neededUntil ? new Date(tx.neededUntil).toLocaleDateString() : 'N/A'
+            neededUntilDisplay: tx.neededUntil ? new Date(tx.neededUntil).toLocaleDateString() : 'N/A',
           }))}
         />
       </div>

@@ -38,7 +38,12 @@ const normalizeInventoryItem = (item) => ({
   quantityUnit: item.quantityUnit || item.unit || '',
   storageLocation: item.storageLocation || '',
   lotNumber: item.lotNumber || '',
-  expiryDate: item.expiryDate || null
+  expiryDate: item.expiryDate || null,
+  abstract: item.abstract || '',
+  displayAbstract: item.displayAbstract || item.abstract || '',
+  abstractSource: item.abstractSource || (item.pubmedId ? 'pubmed' : item.abstract ? 'manual' : 'none'),
+  isAiGenerated: Boolean(item.isAiGenerated),
+  pubmedId: item.pubmedId || '',
 });
 
 const normalizeTransaction = (tx) => ({
@@ -76,6 +81,8 @@ const normalizeStoreItem = (item) => ({
   quantityUnit: item.quantityUnit || 'units',
   storageLocation: item.storageLocation || '',
   description: item.description || '',
+  abstract: item.abstract || '',
+  pubmedId: item.pubmedId || '',
 });
 
 const normalizeStoreAllotment = (entry) => ({
@@ -142,7 +149,7 @@ const useAppStore = create((set) => ({
       transactions: state.transactions.filter((tx) => String(tx.labId) !== String(labId) && String(tx.labId?._id) !== String(labId)),
     }));
   },
-  createInventoryItem: async ({ labId, itemCode, name, category, quantity, quantityUnit, minThreshold = 5, storageLocation = '', lotNumber = '', expiryDate = '' }) => {
+  createInventoryItem: async ({ labId, itemCode, name, category, quantity, quantityUnit, minThreshold = 5, storageLocation = '', lotNumber = '', expiryDate = '', abstract = '', pubmedId = '' }) => {
     const response = await api.post('/inventory', {
       labId,
       itemCode,
@@ -153,14 +160,20 @@ const useAppStore = create((set) => ({
       minThreshold: Number(minThreshold),
       storageLocation,
       lotNumber,
-      expiryDate: expiryDate || null
+      expiryDate: expiryDate || null,
+      abstract,
+      pubmedId
     });
     const item = normalizeInventoryItem(getPayload(response.data));
     set((state) => ({ inventory: [item, ...state.inventory] }));
     return item;
   },
   updateInventoryItem: async (itemId, updates) => {
-    const response = await api.put(`/inventory/${itemId}`, updates);
+    const payload = { ...updates };
+    // Ensure abstract and pubmedId are included if provided
+    if ('abstract' in updates) payload.abstract = updates.abstract;
+    if ('pubmedId' in updates) payload.pubmedId = updates.pubmedId;
+    const response = await api.put(`/inventory/${itemId}`, payload);
     const updatedItem = normalizeInventoryItem(getPayload(response.data));
     set((state) => ({
       inventory: state.inventory.map((item) => (item.id === updatedItem.id ? updatedItem : item))
@@ -172,6 +185,31 @@ const useAppStore = create((set) => ({
     set((state) => ({
       inventory: state.inventory.filter((item) => item.id !== itemId)
     }));
+  },
+  fetchChemicalAbstractForInventory: async (chemicalName, inventoryItemId = null) => {
+    try {
+      const response = await api.post('/inventory/fetch-abstract', {
+        chemicalName,
+        inventoryItemId,
+      });
+      const result = getPayload(response.data);
+      
+      // If inventoryItemId was provided and abstract was fetched, update the inventory item in state
+      if (inventoryItemId && result.source === 'pubmed') {
+        set((state) => ({
+          inventory: state.inventory.map((item) =>
+            item.id === inventoryItemId
+              ? { ...item, abstract: result.abstract, pubmedId: result.pmid }
+              : item
+          )
+        }));
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Failed to fetch abstract:', error);
+      throw error;
+    }
   },
   createBorrowRequest: async ({ itemId, quantity, purpose, neededUntil, notes = '' }) => {
     const response = await api.post('/transactions/borrow', {
@@ -289,6 +327,31 @@ const useAppStore = create((set) => ({
     set((state) => ({
       storeItems: state.storeItems.filter((item) => item.id !== itemId)
     }));
+  },
+  fetchChemicalAbstract: async (chemicalName, storeItemId = null) => {
+    try {
+      const response = await api.post('/store-items/fetch-abstract', {
+        chemicalName,
+        storeItemId,
+      });
+      const result = getPayload(response.data);
+      
+      // If storeItemId was provided and abstract was fetched, update the store item in state
+      if (storeItemId && result.source === 'pubmed') {
+        set((state) => ({
+          storeItems: state.storeItems.map((item) =>
+            item.id === storeItemId
+              ? { ...item, abstract: result.abstract, pubmedId: result.pmid }
+              : item
+          )
+        }));
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Failed to fetch abstract:', error);
+      throw error;
+    }
   },
   fetchStoreAllotments: async (filters = {}) => {
     set({ loading: true });

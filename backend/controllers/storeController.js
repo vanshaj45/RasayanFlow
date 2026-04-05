@@ -1,6 +1,7 @@
 const asyncHandler = require('express-async-handler');
 const StoreItem = require('../models/StoreItem');
 const ActivityLog = require('../models/ActivityLog');
+const { getChemicalAbstract } = require('../utils/pubmedService');
 
 const CATEGORY_OPTIONS = ['Glassware', 'Chemical'];
 const CHEMICAL_UNITS = ['mL', 'L', 'uL', 'mg', 'g', 'kg'];
@@ -41,6 +42,8 @@ const buildStoreSnapshot = (item) => ({
   quantityUnit: item.quantityUnit,
   storageLocation: item.storageLocation || '',
   description: item.description || '',
+  abstract: item.abstract || '',
+  pubmedId: item.pubmedId || '',
 });
 
 const createStoreLog = ({ userId, action, details, entityId = null, metadata = null }) =>
@@ -78,7 +81,7 @@ const listStoreItems = asyncHandler(async (req, res) => {
 });
 
 const createStoreItem = asyncHandler(async (req, res) => {
-  const { itemCode, itemName, category, subCategory, quantity, quantityUnit, storageLocation, description } = req.body;
+  const { itemCode, itemName, category, subCategory, quantity, quantityUnit, storageLocation, description, abstract, pubmedId } = req.body;
   const normalizedCategory = normalizeStoreCategory(category);
   const normalizedUnit = normalizeStoreUnit(normalizedCategory, quantityUnit);
   validateStorePayload({ category: normalizedCategory, quantityUnit: normalizedUnit });
@@ -99,6 +102,8 @@ const createStoreItem = asyncHandler(async (req, res) => {
     quantityUnit: normalizedUnit,
     storageLocation: storageLocation?.trim() || '',
     description: description?.trim() || '',
+    abstract: abstract?.trim() || '',
+    pubmedId: pubmedId?.trim() || '',
     lastUpdated: new Date(),
   });
 
@@ -140,6 +145,8 @@ const updateStoreItem = asyncHandler(async (req, res) => {
   }
   if (updates.storageLocation != null) updates.storageLocation = String(updates.storageLocation).trim();
   if (updates.description != null) updates.description = String(updates.description).trim();
+  if (updates.abstract != null) updates.abstract = String(updates.abstract).trim();
+  if (updates.pubmedId != null) updates.pubmedId = String(updates.pubmedId).trim();
   if (updates.quantity != null && Number(updates.quantity) < 0) {
     res.status(400);
     throw new Error('Quantity cannot be negative');
@@ -182,4 +189,44 @@ const deleteStoreItem = asyncHandler(async (req, res) => {
   res.json({ success: true, message: 'Store item deleted' });
 });
 
-module.exports = { listStoreItems, createStoreItem, updateStoreItem, deleteStoreItem };
+const fetchChemicalAbstract = asyncHandler(async (req, res) => {
+  const { chemicalName, storeItemId } = req.body;
+
+  if (!chemicalName || chemicalName.trim().length === 0) {
+    res.status(400);
+    throw new Error('Chemical name is required');
+  }
+
+  try {
+    const abstractData = await getChemicalAbstract(chemicalName.trim());
+
+    // If storeItemId is provided, update the item with the fetched abstract
+    if (storeItemId && abstractData.source === 'pubmed') {
+      const item = await StoreItem.findById(storeItemId);
+      if (item && item.category === 'Chemical') {
+        item.abstract = abstractData.abstract;
+        item.pubmedId = abstractData.pmid;
+        item.lastUpdated = new Date();
+        await item.save();
+
+        await createStoreLog({
+          userId: req.user._id,
+          action: 'update_abstract',
+          details: `Updated abstract for ${item.itemName} from PubMed`,
+          entityId: item._id,
+          metadata: { pmid: abstractData.pmid, source: 'pubmed' },
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      data: abstractData,
+    });
+  } catch (error) {
+    res.status(500);
+    throw new Error(`Failed to fetch abstract: ${error.message}`);
+  }
+});
+
+module.exports = { listStoreItems, createStoreItem, updateStoreItem, deleteStoreItem, fetchChemicalAbstract };

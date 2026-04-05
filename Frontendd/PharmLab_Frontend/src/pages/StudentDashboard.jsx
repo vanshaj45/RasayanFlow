@@ -52,7 +52,6 @@ export default function StudentDashboard() {
     const query = inventorySearch.trim();
 
     if (!query) {
-      setInventoryMatches([]);
       return;
     }
 
