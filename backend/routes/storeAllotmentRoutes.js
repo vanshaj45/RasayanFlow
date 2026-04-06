@@ -39,7 +39,7 @@ router.post(
   roleMiddleware(['student']),
   [
     body('storeItemId').isMongoId(),
-    body('quantity').isInt({ min: 1 }),
+    body('quantity').isInt({ min: 1, max: 1000 }),
     body('purpose').optional().isString(),
     body('requestNotes').optional().isString(),
     body('dueDate').optional({ nullable: true }).isISO8601(),

@@ -107,6 +107,11 @@ const requestStoreItem = asyncHandler(async (req, res) => {
     throw new Error('Store item not found');
   }
 
+  if (storeItem.quantity < Number(quantity)) {
+    res.status(400);
+    throw new Error('Requested quantity exceeds currently available stock');
+  }
+
   const allotment = await StoreAllotment.create({
     storeItemId: storeItem._id,
     studentId: req.user._id,

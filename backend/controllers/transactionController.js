@@ -4,6 +4,36 @@ const Transaction = require('../models/Transaction');
 const ActivityLog = require('../models/ActivityLog');
 const { getIo } = require('../sockets');
 
+const getBorrowReturnBalance = async (userId, itemId) => {
+  const [approvedBorrow, returned] = await Promise.all([
+    Transaction.aggregate([
+      {
+        $match: {
+          userId,
+          itemId,
+          type: 'borrow',
+          status: 'approved',
+        },
+      },
+      { $group: { _id: null, total: { $sum: '$quantity' } } },
+    ]),
+    Transaction.aggregate([
+      {
+        $match: {
+          userId,
+          itemId,
+          type: 'return',
+        },
+      },
+      { $group: { _id: null, total: { $sum: '$quantity' } } },
+    ]),
+  ]);
+
+  const borrowedQty = approvedBorrow[0]?.total || 0;
+  const returnedQty = returned[0]?.total || 0;
+  return borrowedQty - returnedQty;
+};
+
 const borrowItem = asyncHandler(async (req, res) => {
   const { itemId, quantity, purpose, neededUntil, notes } = req.body;
   if (!itemId || !quantity || quantity <= 0) {
@@ -70,6 +100,14 @@ const returnItem = asyncHandler(async (req, res) => {
   if (!item) {
     res.status(404);
     throw new Error('Inventory item not found');
+  }
+
+  if (req.user.role === 'student') {
+    const availableToReturn = await getBorrowReturnBalance(req.user._id, item._id);
+    if (availableToReturn < Number(quantity)) {
+      res.status(400);
+      throw new Error('Return denied: quantity exceeds your approved borrow balance for this item');
+    }
   }
 
   item.quantity += quantity;

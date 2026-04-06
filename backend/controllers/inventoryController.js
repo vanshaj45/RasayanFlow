@@ -5,6 +5,15 @@ const { getIo } = require('../sockets');
 const { getChemicalAbstract } = require('../utils/pubmedService');
 const { decorateInventoryAbstract } = require('../utils/abstractFallbackService');
 
+const assertLabAdminAccess = (req, res, ownerLabId) => {
+  if (req.user.role !== 'labAdmin') return;
+
+  if (!req.user.labId || String(ownerLabId) !== String(req.user.labId)) {
+    res.status(403);
+    throw new Error('Forbidden: lab admins can only access inventory in their assigned lab');
+  }
+};
+
 const buildInventorySnapshot = (item) => ({
   itemCode: item.itemCode,
   itemName: item.itemName,
@@ -51,6 +60,8 @@ const createInventory = asyncHandler(async (req, res) => {
     throw new Error('Missing required fields');
   }
 
+  assertLabAdminAccess(req, res, labId);
+
   const normalizedCode = itemCode.trim().toUpperCase();
   const existingItem = await Inventory.findOne({ labId, itemCode: normalizedCode });
   if (existingItem) {
@@ -95,6 +106,8 @@ const updateInventory = asyncHandler(async (req, res) => {
     res.status(404);
     throw new Error('Item not found');
   }
+
+  assertLabAdminAccess(req, res, item.labId);
 
   if (updates.quantity != null && updates.quantity < 0) {
     res.status(400);
@@ -153,6 +166,8 @@ const deleteInventory = asyncHandler(async (req, res) => {
     throw new Error('Item not found');
   }
 
+  assertLabAdminAccess(req, res, item.labId);
+
   const snapshot = buildInventorySnapshot(item);
   await item.deleteOne();
 
@@ -172,7 +187,15 @@ const getInventory = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, itemName = '', labId } = req.query;
 
   const criteria = {};
-  if (labId) criteria.labId = labId;
+  if (req.user.role === 'labAdmin') {
+    criteria.labId = req.user.labId;
+    if (labId && String(labId) !== String(req.user.labId)) {
+      res.status(403);
+      throw new Error('Forbidden: lab admins can only query inventory for their assigned lab');
+    }
+  } else if (labId) {
+    criteria.labId = labId;
+  }
   if (itemName) criteria.itemName = { $regex: itemName, $options: 'i' };
 
   const total = await Inventory.countDocuments(criteria);
@@ -193,6 +216,8 @@ const getInventoryById = asyncHandler(async (req, res) => {
     throw new Error('Item not found');
   }
 
+  assertLabAdminAccess(req, res, item.labId);
+
   res.json({ success: true, data: decorateInventoryAbstract(item) });
 });
 
@@ -211,6 +236,7 @@ const fetchChemicalAbstractForInventory = asyncHandler(async (req, res) => {
     if (inventoryItemId && abstractData.source === 'pubmed') {
       const item = await Inventory.findById(inventoryItemId);
       if (item) {
+        assertLabAdminAccess(req, res, item.labId);
         item.abstract = abstractData.abstract;
         item.pubmedId = abstractData.pmid;
         item.lastUpdated = new Date();
