@@ -40,37 +40,22 @@ api.interceptors.request.use(
  * Response interceptor: Handle errors and auth
  */
 api.interceptors.response.use(
-  (response) => {
-    // Return data directly for cleaner usage
-    return response;
-  },
+  (response) => response,
   (error) => {
     const status = error?.response?.status;
-    const message = error?.response?.data?.message || error?.message;
 
     // Handle 401 Unauthorized - clear session and redirect to login
     if (status === 401) {
       clearAuthSession();
       navigate('/login');
-      return Promise.reject({
-        status: 401,
-        message: 'Your session has expired. Please log in again.',
-      });
-    }
-
-    // Handle 429 Too Many Requests
-    if (status === 429) {
-      return Promise.reject({
-        status: 429,
-        message: 'Too many requests. Please wait before trying again.',
-      });
     }
 
     // Log error for debugging in development
     if (import.meta.env.DEV) {
-      console.error(`[API Error ${status}]`, message || error);
+      console.error(`[API Error ${status}]`, error?.response?.data?.message || error?.message);
     }
 
+    // Return original error so all handlers work correctly
     return Promise.reject(error);
   }
 );
