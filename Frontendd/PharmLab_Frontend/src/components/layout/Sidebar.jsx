@@ -1,4 +1,4 @@
-import { LayoutDashboard, MapPin, ClipboardList, Users, CheckCircle2, History, BarChart3, Store, Boxes, PackageSearch } from 'lucide-react';
+import { LayoutDashboard, MapPin, ClipboardList, Users, CheckCircle2, History, BarChart3, Store, Boxes, PackageSearch, Info } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import useAuthStore from '../../store/authStore';
 
@@ -7,20 +7,24 @@ const linksMap = {
     { to: '/', label: 'Overview', icon: LayoutDashboard },
     { to: '/labs', label: 'Labs', icon: MapPin },
     { to: '/approval', label: 'Admin Requests', icon: Users },
-    { to: '/activity', label: 'Activity', icon: History }
+    { to: '/activity', label: 'Activity', icon: History },
+    { to: '/about', label: 'About Us', icon: Info }
   ],
   'lab-admin': [
     { to: '/inventory', label: 'Inventory', icon: ClipboardList },
     { to: '/analytics', label: 'Analytics', icon: BarChart3 },
-    { to: '/transactions', label: 'Transactions', icon: CheckCircle2 }
+    { to: '/transactions', label: 'Transactions', icon: CheckCircle2 },
+    { to: '/about', label: 'About Us', icon: Info }
   ],
   'store-admin': [
-    { to: '/store-dashboard', label: 'Store Inventory', icon: Store }
+    { to: '/store-dashboard', label: 'Store Inventory', icon: Store },
+    { to: '/about', label: 'About Us', icon: Info }
   ],
   student: [
     { to: '/', label: 'Browse Labs', icon: MapPin },
     { to: '/store', label: 'Store', icon: Boxes },
-    { to: '/my-borrowings', label: 'My Borrowings', icon: PackageSearch }
+    { to: '/my-borrowings', label: 'My Borrowings', icon: PackageSearch },
+    { to: '/about', label: 'About Us', icon: Info }
   ]
 };
 

@@ -15,6 +15,7 @@ import StudentDashboard from './pages/StudentDashboard';
 import StudentBorrowingsPage from './pages/StudentBorrowingsPage';
 import StudentLabDetail from './pages/StudentLabDetail';
 import StudentStorePage from './pages/StudentStorePage';
+import AboutPage from './pages/AboutPage';
 import NotFound from './pages/NotFound';
 import socket from './services/socket';
 import './index.css';
@@ -153,6 +154,7 @@ function App() {
                     <Route path='approval' element={role === 'super-admin' ? <SuperAdminDashboard /> : <Navigate to='/' replace />} />
                     <Route path='activity' element={role === 'super-admin' ? <SuperAdminDashboard /> : <Navigate to='/' replace />} />
                     <Route path='labs/:id' element={role === 'student' ? <StudentLabDetail /> : <Navigate to='/' replace />} />
+                    <Route path='about' element={<AboutPage />} />
                     <Route path='*' element={<NotFound />} />
                   </Routes>
                   <div className='mt-8'>
