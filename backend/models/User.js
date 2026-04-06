@@ -12,6 +12,9 @@ const userSchema = new mongoose.Schema({
   },
   labId: { type: mongoose.Schema.Types.ObjectId, ref: 'Lab' },
   isApproved: { type: Boolean, default: false },
+  isBlocked: { type: Boolean, default: false },
+  blockedReason: { type: String, trim: true, default: '' },
+  blockedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   createdAt: { type: Date, default: Date.now },
 });
 

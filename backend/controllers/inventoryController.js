@@ -81,7 +81,7 @@ const createInventory = asyncHandler(async (req, res) => {
     entityId: item._id,
     metadata: { after: buildInventorySnapshot(item) },
   });
-  getIo().emit('inventoryUpdated', { action: 'created', item });
+  getIo().emit('inventory.updated', { action: 'created', item });
 
   res.status(201).json({ success: true, data: decorateInventoryAbstract(item) });
 });
@@ -139,7 +139,7 @@ const updateInventory = asyncHandler(async (req, res) => {
     entityId: item._id,
     metadata: { before, after: buildInventorySnapshot(item) },
   });
-  getIo().emit('inventoryUpdated', { action: 'updated', item });
+  getIo().emit('inventory.updated', { action: 'updated', item });
 
   res.json({ success: true, data: decorateInventoryAbstract(item) });
 });
@@ -163,7 +163,7 @@ const deleteInventory = asyncHandler(async (req, res) => {
     entityId: item._id,
     metadata: { before: snapshot },
   });
-  getIo().emit('inventoryUpdated', { action: 'deleted', itemId: id });
+  getIo().emit('inventory.updated', { action: 'deleted', itemId: id });
 
   res.json({ success: true, message: 'Item deleted' });
 });
@@ -224,7 +224,7 @@ const fetchChemicalAbstractForInventory = asyncHandler(async (req, res) => {
           metadata: { pmid: abstractData.pmid, source: 'pubmed' },
         });
 
-        getIo().emit('inventoryUpdated', { action: 'updated', item });
+        getIo().emit('inventory.updated', { action: 'updated', item });
       }
     }
 

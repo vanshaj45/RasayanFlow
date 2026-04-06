@@ -58,8 +58,10 @@ function App() {
     }
 
     socket.on('inventory.updated', (payload) => {
-      setToast({ type: 'success', message: `${payload.name || 'Item'} updated` });
-      setHighlight(payload.id || payload.name);
+      const itemName = payload?.item?.itemName || payload?.item?.name || payload?.name || 'Item';
+      const highlightId = payload?.item?._id || payload?.item?.id || payload?.itemId || payload?.id || itemName;
+      setToast({ type: 'success', message: `${itemName} updated` });
+      setHighlight(highlightId);
     });
 
     socket.on('store:new_request', (payload) => {

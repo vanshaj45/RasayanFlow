@@ -45,7 +45,7 @@ const borrowItem = asyncHandler(async (req, res) => {
 
     await ActivityLog.create({ userId: req.user._id, action: 'borrow_item', details: `Borrowed ${quantity} of ${item.itemName}` });
     getIo().emit('itemBorrowed', { item, transaction });
-    getIo().emit('inventoryUpdated', { action: 'borrow', item });
+    getIo().emit('inventory.updated', { action: 'borrow', item });
 
     if (item.quantity < item.minThreshold) {
       await ActivityLog.create({ userId: req.user._id, action: 'low_stock_alert', details: `${item.itemName} is below threshold` });
@@ -86,7 +86,7 @@ const returnItem = asyncHandler(async (req, res) => {
 
   await ActivityLog.create({ userId: req.user._id, action: 'return_item', details: `Returned ${quantity} of ${item.itemName}` });
   getIo().emit('itemReturned', { item, transaction });
-  getIo().emit('inventoryUpdated', { action: 'return', item });
+  getIo().emit('inventory.updated', { action: 'return', item });
 
   res.status(201).json({ success: true, data: { transaction, item } });
 });
@@ -129,7 +129,7 @@ const approveBorrowRequest = asyncHandler(async (req, res) => {
 
   await ActivityLog.create({ userId: req.user._id, action: 'approve_borrow_request', details: `Approved borrow request for ${item.itemName}` });
   getIo().emit('borrowRequestApproved', { item, transaction });
-  getIo().emit('inventoryUpdated', { action: 'borrow', item });
+  getIo().emit('inventory.updated', { action: 'borrow', item });
 
   res.json({ success: true, data: { transaction, item } });
 });
