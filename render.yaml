@@ -1,0 +1,41 @@
+# Render.yaml for deployment configuration
+# Reference: https://render.com/docs/render-yaml-spec
+
+services:
+  - name: pharmlab-backend
+    type: web
+    runtime: node
+    plan: free
+    startCommand: npm start
+    buildCommand: npm install
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGO_URI
+        scope: project
+      - key: JWT_SECRET
+        scope: project
+      - key: PORT
+        value: 5000
+      - key: RATE_LIMIT_WINDOW_MS
+        value: 60000
+      - key: RATE_LIMIT_MAX
+        value: 100
+
+  - name: pharmlab-frontend
+    type: static
+    plan: free
+    buildCommand: cd Frontendd/PharmLab_Frontend && npm install && npm run build
+    staticPublishPath: Frontendd/PharmLab_Frontend/dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        scope: project
+      - key: VITE_SOCKET_URL
+        scope: project
+      - key: VITE_API_TIMEOUT
+        value: 30000
+    routes:
+      - path: /
+        destination: /index.html
+      - path: /*
+        destination: /index.html

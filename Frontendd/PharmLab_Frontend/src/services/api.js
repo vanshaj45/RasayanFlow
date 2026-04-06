@@ -2,29 +2,75 @@ import axios from 'axios';
 import { getToken, clearAuthSession } from '../utils/auth';
 import { navigate } from '../utils/navigate';
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5000';
+// Support both VITE_API_BASE and VITE_API_BASE_URL for compatibility
+const API_BASE = 
+  import.meta.env.VITE_API_BASE_URL || 
+  import.meta.env.VITE_API_BASE || 
+  'http://localhost:5000';
+
+const TIMEOUT = parseInt(import.meta.env.VITE_API_TIMEOUT || '30000', 10);
 
 const api = axios.create({
   baseURL: API_BASE,
-  headers: { 'Content-Type': 'application/json' }
-});
-
-api.interceptors.request.use((config) => {
-  const token = getToken();
-  if (token && config.headers) {
-    config.headers.Authorization = `Bearer ${token}`;
+  timeout: TIMEOUT,
+  headers: { 
+    'Content-Type': 'application/json',
+    'X-Client-Version': import.meta.env.VITE_APP_VERSION || '1.0.0',
   }
-  return config;
 });
 
+/**
+ * Request interceptor: Add auth token and handle setup
+ */
+api.interceptors.request.use(
+  (config) => {
+    const token = getToken();
+    if (token && config.headers) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    console.error('Request setup failed:', error);
+    return Promise.reject(error);
+  }
+);
+
+/**
+ * Response interceptor: Handle errors and auth
+ */
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Return data directly for cleaner usage
+    return response;
+  },
   (error) => {
     const status = error?.response?.status;
+    const message = error?.response?.data?.message || error?.message;
+
+    // Handle 401 Unauthorized - clear session and redirect to login
     if (status === 401) {
       clearAuthSession();
       navigate('/login');
+      return Promise.reject({
+        status: 401,
+        message: 'Your session has expired. Please log in again.',
+      });
     }
+
+    // Handle 429 Too Many Requests
+    if (status === 429) {
+      return Promise.reject({
+        status: 429,
+        message: 'Too many requests. Please wait before trying again.',
+      });
+    }
+
+    // Log error for debugging in development
+    if (import.meta.env.DEV) {
+      console.error(`[API Error ${status}]`, message || error);
+    }
+
     return Promise.reject(error);
   }
 );

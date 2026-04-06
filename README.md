@@ -1,6 +1,8 @@
-# Rasayan_Flow - Pharmaceutical Laboratory Management System
+# 🧪 RasayanFlow - Pharmaceutical Laboratory Management System
 
-A comprehensive web-based solution for managing pharmaceutical laboratory operations, inventory, and student borrowings. PharmLab streamlines laboratory resource management with role-based access control and real-time updates.
+**Production-Ready • Enterprise-Grade • Professional UI**
+
+A comprehensive, production-ready web application for managing pharmaceutical laboratory operations, inventory tracking, student borrowings, and chemical abstracts. Built with modern technologies and deployed on Render for scalability.
 
 ## 📋 Table of Contents
 
@@ -19,16 +21,22 @@ A comprehensive web-based solution for managing pharmaceutical laboratory operat
 
 ## 🎯 Overview
 
-PharmLab is a full-stack pharmaceutical laboratory management system designed to:
-- Manage laboratory inventory and resources
-- Track student borrowings and returns
-- Maintain activity logs for audit trails
-- Provide role-based dashboards for different user types
-- Enable real-time notifications via WebSockets
+**RasayanFlow** streamlines pharmaceutical laboratory operations with:
 
-The system consists of:
-- **Backend**: Node.js Express server with MongoDB database
-- **Frontend**: React application with Vite build tool and Tailwind CSS styling
+✅ **Real-Time Inventory Management** - Track chemicals, reagents, and equipment  
+✅ **Student Borrowing System** - Automated request/approval workflow  
+✅ **Chemical Abstracts** - Auto-fetch from PubMed or AI-generated fallbacks  
+✅ **Multi-Lab Support** - Manage multiple labs with dedicated admins  
+✅ **WebSocket Integration** - Live updates across all users  
+✅ **Complete Audit Trail** - Activity logging for compliance  
+✅ **Professional UI** - Dark mode, responsive design, polished components  
+✅ **Production Ready** - Deployed on Render, optimized performance  
+
+### Architecture
+- **Backend**: Node.js + Express + MongoDB + Socket.io
+- **Frontend**: React + Vite + Zustand + TailwindCSS
+- **Deployment**: Render (both frontend & backend)
+- **Database**: MongoDB Atlas (cloud)
 
 ## 🛠 Tech Stack
 
@@ -122,79 +130,54 @@ PharmLab/
 - Real-time inventory updates
 
 ## 📦 Prerequisites
+Quick Start (Local Development)
 
-- **Node.js** (v14 or higher)
-- **npm** or **yarn**
-- **MongoDB** (local or cloud instance - MongoDB Atlas)
-- **Git** (optional, for version control)
+### Prerequisites
+- **Node.js** v18+ ([Download](https://nodejs.org/))
+- **MongoDB** ([Local](https://docs.mongodb.com/manual/installation/) or [Atlas Cloud](https://www.mongodb.com/cloud/atlas))
+- **Git** (optional)
 
-## 🚀 Installation
+### Installation
 
-### 1. Clone or Extract Project
+**1. Clone Repository**
 ```bash
-# Navigate to project directory
-cd PharmLab
+git clone https://github.com/vanshaj45/RasayanFlow.git
+cd RasayanFlow
 ```
 
-### 2. Backend Setup
-
-```bash
-# Navigate to backend directory
-cd backend
-
-# Install dependencies
-npm install
-
-# Create environment configuration (if needed)
-# Configure database connection in config/db.js
-```
-
-### 3. Frontend Setup
-
-```bash
-# Navigate to frontend directory
-cd Frontendd/PharmLab_Frontend
-
-# Install dependencies
-npm install
-```
-
-## ▶️ Running the Application
-
-### Backend Server
-
+**2. Backend Setup**
 ```bash
 cd backend
+npm install
+cp .env.example .env
 
-# Development mode (with auto-reload)
-npm run dev
-
-# Production mode
-npm start
-
-# Seed demo data (if needed)
-npm run seed
+# Edit .env with your values:
+# MONGO_URI = your MongoDB connection string
+# JWT_SECRET = a secure random key
+npm run seed:demo      # (Optional) Load demo data
+npm run dev             # Start server on :5000
 ```
 
-The backend server will run on `http://localhost:5000` (or configured port)
-
-### Frontend Application
-
+**3. Frontend Setup** (in new terminal)
 ```bash
 cd Frontendd/PharmLab_Frontend
+npm install
+cp .env.example .env
 
-# Development mode with hot reload
-npm run dev
-
-# Build for production
-npm run build
-
-# Preview production build
-npm run preview
+# Edit .env:
+# VITE_API_BASE_URL = http://localhost:5000
+npm run dev             # Start on :5173
 ```
 
-The frontend will typically run on `http://localhost:5173` (Vite default)
+Open http://localhost:5173 in your browser.
 
+### Demo Credentials
+```
+Super Admin:  vanshajbairagi10@gmail.com / Demo@123
+Lab Admin:    junaid.labadmin@pharmlab.demo / Demo@123
+Store Admin:  nisha.storeadmin@pharmlab.demo / Demo@123
+Student:      sara.student@pharmlab.demo / Demo@123
+```
 ### Running Together
 
 You can run both in parallel by:
@@ -315,13 +298,90 @@ Edit environment variables in `Frontendd/PharmLab_Frontend/.env`:
 **Port Already in Use**
 ```bash
 # Change port in server.js or use environment variable
-# Or kill process using the port (Windows)
-netstat -ano | findstr :5000
-taskkill /PID <PID> /F
+# O🚢 Production Deployment (Render)
+
+### Deploy Backend
+1. Push code to GitHub
+2. Go to [Render Dashboard](https://dashboard.render.com)
+3. Create **New Web Service**
+4. Connect your GitHub repo
+5. Set build command: `npm install && npm start`
+6. Add environment variables:
+   ```
+   MONGO_URI=your_mongodb_atlas_uri
+   JWT_SECRET=your_secure_secret
+   PORT=5000
+   NODE_ENV=production
+   ```
+7. Deploy ✅
+
+### Deploy Frontend
+1. Create new **Static Site** on Render
+2. Connect same GitHub repo
+3. Set build command:
+   ```
+   cd Frontendd/PharmLab_Frontend && npm install && npm run build
+   ```
+4. Set publish directory: `Frontendd/PharmLab_Frontend/dist`
+5. Add environment variable:
+   ```
+   VITE_API_BASE_URL=https://your-backend-service.onrender.com
+   ```
+6. Deploy ✅
+
+Deployed at:
+- Frontend: https://your-frontend.onrender.com
+- Backend: https://your-backend.onrender.com
+
+## 📚 Environment Variables
+
+### Backend (.env)
+```bash
+MONGO_URI=mongodb+srv://user:password@cluster.mongodb.net/pharmlab
+JWT_SECRET=your-secret-jwt-key-change-this
+PORT=5000
+RATE_LIMIT_WINDOW_MS=60000
+RATE_LIMIT_MAX=100
+NODE_ENV=development
 ```
 
-**MongoDB Connection Failed**
-- Verify MongoDB is running
+### Frontend (.env)
+```bash
+VITE_API_BASE_URL=http://localhost:5000
+VITE_SOCKET_URL=http://localhost:5000
+VITE_API_TIMEOUT=30000
+VITE_APP_NAME=PharmLab
+VITE_DEBUG=true
+```
+
+## ✅ Production Features Implemented
+
+- ✅ **Client-Side Routing**: `_redirects` file for SPA deployment
+- ✅ **Error Handling**: Comprehensive try-catch + user-friendly messages
+- ✅ **Loading States**: Spinners, skeleton loaders, disabled buttons
+- ✅ **Auth Persistence**: localStorage + auto-login on refresh
+- ✅ **Protected Routes**: Role-based access control
+- ✅ **Code Splitting**: Lazy loading, optimized bundles
+- ✅ **Performance**: Terser minification, tree-shaking
+- ✅ **Real-Time**: WebSocket for live updates
+- ✅ **Dark Mode**: Complete theme support
+- ✅ **Responsive**: Mobile-first design
+- ✅ **CORS**: Proper cross-origin configuration
+- ✅ **Rate Limiting**: API rate limiting middleware
+- ✅ **Logging**: Activity audit trail
+
+## 🧪 Testing
+
+```bash
+# Backend syntax check
+cd backend
+node -c server.js
+
+# Frontend build validation
+cd Frontendd/PharmLab_Frontend
+npm run lint
+npm run build
+```running
 - Check connection string in `config/db.js`
 - Ensure database credentials are correct
 
