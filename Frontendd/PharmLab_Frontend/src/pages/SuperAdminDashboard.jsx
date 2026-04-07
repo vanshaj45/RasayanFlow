@@ -3,6 +3,7 @@ import { Plus, CheckCircle2, Users, Warehouse, Search } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import useDebounce from '../hooks/useDebounce';
 import useAppStore from '../store/appStore';
+import useAuthStore from '../store/authStore';
 import Card from '../components/ui/Card';
 import Table from '../components/ui/Table';
 import Modal from '../components/ui/Modal';
@@ -20,6 +21,7 @@ export default function SuperAdminDashboard() {
     deleteLab,
     createLabAdmin,
     createStoreAdmin,
+    createSuperAdmin,
     assignAdminToLab,
     removeAdminFromLab,
     approveUserAccount,
@@ -28,10 +30,13 @@ export default function SuperAdminDashboard() {
     setToast,
     setHighlight
   } = useAppStore();
+  const { changePassword } = useAuthStore();
   const [createOpen, setCreateOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [savingAdmin, setSavingAdmin] = useState(false);
+  const [savingSuperAdmin, setSavingSuperAdmin] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
   const [deletingLab, setDeletingLab] = useState(false);
   const [approvingUserId, setApprovingUserId] = useState('');
   const [selectedLab, setSelectedLab] = useState(null);
@@ -40,6 +45,8 @@ export default function SuperAdminDashboard() {
   const currentView = location.pathname === '/labs' ? 'labs' : location.pathname === '/approval' ? 'approval' : location.pathname === '/activity' ? 'activity' : 'overview';
   const [newAdmin, setNewAdmin] = useState({ name: '', email: '', password: '' });
   const [newStoreAdmin, setNewStoreAdmin] = useState({ name: '', email: '', password: '' });
+  const [newSuperAdmin, setNewSuperAdmin] = useState({ name: '', email: '', password: '' });
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
 
   useEffect(() => {
     fetchLabs();
@@ -262,6 +269,48 @@ export default function SuperAdminDashboard() {
     }
   };
 
+  const handleCreateSuperAdmin = async () => {
+    if (!newSuperAdmin.name.trim() || !newSuperAdmin.email.trim() || !newSuperAdmin.password.trim()) return;
+
+    setSavingSuperAdmin(true);
+    try {
+      await createSuperAdmin({
+        name: newSuperAdmin.name.trim(),
+        email: newSuperAdmin.email.trim(),
+        password: newSuperAdmin.password,
+      });
+      await Promise.all([fetchUsers(), fetchActivityLogs({ limit: 100 })]);
+      setToast({ type: 'success', message: 'Super admin account created.' });
+      setNewSuperAdmin({ name: '', email: '', password: '' });
+    } catch (error) {
+      setToast({ type: 'error', message: error?.response?.data?.message || 'Failed to create super admin account.' });
+    } finally {
+      setSavingSuperAdmin(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!passwordForm.currentPassword.trim() || !passwordForm.newPassword.trim()) return;
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setToast({ type: 'error', message: 'New passwords do not match.' });
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      await changePassword({
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+      });
+      setToast({ type: 'success', message: 'Password updated successfully.' });
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    } catch (error) {
+      setToast({ type: 'error', message: error?.response?.data?.message || 'Failed to update password.' });
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
   return (
     <div className='space-y-5 pb-10'>
       {currentView === 'overview' ? (
@@ -358,6 +407,28 @@ export default function SuperAdminDashboard() {
                 <Input label='Temporary password' type='password' value={newStoreAdmin.password} onChange={(e) => setNewStoreAdmin((state) => ({ ...state, password: e.target.value }))} minLength={6} />
                 <Button onClick={handleCreateStoreAdmin} className='w-full' disabled={savingAdmin}>
                   {savingAdmin ? 'Saving...' : 'Create Store Admin'}
+                </Button>
+              </div>
+            </Card>
+          </div>
+          <div className='grid gap-5 lg:grid-cols-2'>
+            <Card title='Create Super Admin' subtitle='Grant another account full platform control'>
+              <div className='space-y-3'>
+                <Input label='Admin name' value={newSuperAdmin.name} onChange={(e) => setNewSuperAdmin((state) => ({ ...state, name: e.target.value }))} />
+                <Input label='Admin email' type='email' value={newSuperAdmin.email} onChange={(e) => setNewSuperAdmin((state) => ({ ...state, email: e.target.value }))} />
+                <Input label='Temporary password' type='password' value={newSuperAdmin.password} onChange={(e) => setNewSuperAdmin((state) => ({ ...state, password: e.target.value }))} minLength={6} />
+                <Button onClick={handleCreateSuperAdmin} className='w-full' disabled={savingSuperAdmin}>
+                  {savingSuperAdmin ? 'Saving...' : 'Create Super Admin'}
+                </Button>
+              </div>
+            </Card>
+            <Card title='Reset My Password' subtitle='Change the password for your current account'>
+              <div className='space-y-3'>
+                <Input label='Current password' type='password' value={passwordForm.currentPassword} onChange={(e) => setPasswordForm((state) => ({ ...state, currentPassword: e.target.value }))} />
+                <Input label='New password' type='password' value={passwordForm.newPassword} onChange={(e) => setPasswordForm((state) => ({ ...state, newPassword: e.target.value }))} minLength={6} />
+                <Input label='Confirm new password' type='password' value={passwordForm.confirmPassword} onChange={(e) => setPasswordForm((state) => ({ ...state, confirmPassword: e.target.value }))} minLength={6} />
+                <Button onClick={handleChangePassword} className='w-full' disabled={changingPassword}>
+                  {changingPassword ? 'Updating...' : 'Reset Password'}
                 </Button>
               </div>
             </Card>

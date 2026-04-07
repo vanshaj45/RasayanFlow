@@ -101,7 +101,6 @@
   - Quick start instructions
   - Deployment guide (Render)
   - Environment variable documentation
-  - Demo credentials
   - Troubleshooting section
   - Features overview
   - Tech stack documentation
@@ -246,7 +245,7 @@ node -c server.js
 
 ## 🎯 KEY FEATURES VERIFIED
 
-- ✅ Multi-lab admin support (3 labs for Junaid)
+- ✅ Multi-lab admin support
 - ✅ PubMed abstract integration
 - ✅ AI-generated fallback abstracts
 - ✅ Real-time WebSocket updates

@@ -70,7 +70,7 @@ PharmLab/
 │   ├── sockets/                     # WebSocket handlers
 │   ├── utils/                       # Utility functions
 │   ├── logs/                        # Application logs
-│   ├── scripts/                     # Database seed scripts
+│   ├── scripts/                     # Maintenance scripts
 │   ├── server.js                    # Entry point
 │   └── package.json                 # Dependencies
 │
@@ -154,7 +154,7 @@ cp .env.example .env
 # Edit .env with your values:
 # MONGO_URI = your MongoDB connection string
 # JWT_SECRET = a secure random key
-npm run seed:demo      # (Optional) Load demo data
+# SUPER_ADMIN_EMAIL = bootstrap super admin account email
 npm run dev             # Start server on :5000
 ```
 
@@ -171,13 +171,7 @@ npm run dev             # Start on :5173
 
 Open http://localhost:5173 in your browser.
 
-### Demo Credentials
-```
-Super Admin:  vanshajbairagi10@gmail.com / Demo@123
-Lab Admin:    junaid.labadmin@pharmlab.demo / Demo@123
-Store Admin:  nisha.storeadmin@pharmlab.demo / Demo@123
-Student:      sara.student@pharmlab.demo / Demo@123
-```
+
 ### Running Together
 
 You can run both in parallel by:
@@ -191,12 +185,14 @@ You can run both in parallel by:
 - `POST /api/auth/register` - User registration
 - `POST /api/auth/login` - User login
 - `POST /api/auth/logout` - User logout
+- `PUT /api/auth/password` - Change the current password
 
 ### User Routes
 - `GET /api/users` - Get all users
 - `GET /api/users/:id` - Get user by ID
 - `PUT /api/users/:id` - Update user
 - `DELETE /api/users/:id` - Delete user
+- `POST /api/users/super-admins` - Create another super admin
 
 ### Laboratory Routes
 - `GET /api/labs` - Get all labs

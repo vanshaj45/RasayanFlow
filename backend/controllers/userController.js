@@ -2,6 +2,17 @@ const asyncHandler = require('express-async-handler');
 const User = require('../models/User');
 const ActivityLog = require('../models/ActivityLog');
 
+const serializeUser = (user) => ({
+  id: user._id,
+  name: user.name,
+  email: user.email,
+  role: user.role,
+  labId: user.labId,
+  isApproved: user.isApproved,
+  isBlocked: user.isBlocked,
+  blockedReason: user.blockedReason || '',
+});
+
 const getUsers = asyncHandler(async (req, res) => {
   const { role, labId, page = 1, limit = 20 } = req.query;
   const filter = {};
@@ -66,4 +77,39 @@ const setUserBlockedState = asyncHandler(async (req, res) => {
   res.json({ success: true, data: user });
 });
 
-module.exports = { getUsers, approveUser, setUserBlockedState };
+const createSuperAdmin = asyncHandler(async (req, res) => {
+  const { name, email, password } = req.body;
+
+  if (!name || !email || !password) {
+    res.status(400);
+    throw new Error('Name, email, and password are required');
+  }
+
+  const normalizedEmail = email.toLowerCase();
+  const userExists = await User.findOne({ email: normalizedEmail });
+  if (userExists) {
+    res.status(400);
+    throw new Error('User already exists');
+  }
+
+  const user = await User.create({
+    name,
+    email: normalizedEmail,
+    password,
+    role: 'superAdmin',
+    isApproved: true,
+  });
+
+  await ActivityLog.create({
+    userId: req.user._id,
+    action: 'create_super_admin',
+    details: `Created super admin ${user.email}`,
+    entityType: 'user',
+    entityId: user._id,
+    metadata: { role: user.role },
+  });
+
+  res.status(201).json({ success: true, data: serializeUser(user) });
+});
+
+module.exports = { getUsers, approveUser, setUserBlockedState, createSuperAdmin };

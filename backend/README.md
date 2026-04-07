@@ -16,11 +16,12 @@ Production-ready Node.js/Express backend for a laboratory inventory system with 
 4. Set `.env` values:
    - `MONGO_URI` (or default uses your supplied connection string)
    - `JWT_SECRET`
+   - `SUPER_ADMIN_EMAIL`
    - `PORT`
 5. `npm run dev` or `npm start`
 
 ## Super Admin HARD RULE
-- Email: `vanshajbairagi10@gmail.com`
+- Email: value configured in `SUPER_ADMIN_EMAIL`
 - Always:
   - `role = superAdmin`
   - `isApproved = true`
@@ -29,7 +30,7 @@ Production-ready Node.js/Express backend for a laboratory inventory system with 
 ## Route Summary
 
 ### Public
-- `POST /auth/register` - Create account (student/labAdmin via role, superAdmin by hardcoded email)
+- `POST /auth/register` - Create account (student/labAdmin via role, superAdmin by configured env email)
 - `POST /auth/login` - Login and receive JWT
 
 ### Super Admin-only
@@ -38,7 +39,11 @@ Production-ready Node.js/Express backend for a laboratory inventory system with 
 - `POST /labs/assign` - Assign lab admin
 - `POST /labs/remove` - Remove lab admin
 - `PUT /labs/approve/:adminId` - Approve admin
+- `POST /users/super-admins` - Create another super admin
 - `GET /logs` - View activity logs
+
+### Authenticated
+- `PUT /auth/password` - Change the current user's password
 
 ### Lab Admin + Super Admin
 - `POST /inventory` - Add inventory
@@ -63,7 +68,7 @@ Production-ready Node.js/Express backend for a laboratory inventory system with 
 - Unapproved non-superadmin cannot access protected routes.
 
 ## Socket.IO events (client subscriptions)
-- `inventoryUpdated` -> payload `{ action: 'created|updated|deleted|borrow|return', item }`
+- `inventory.updated` -> payload `{ action: 'created|updated|deleted|borrow|return', item }`
 - `itemBorrowed` -> socket event on borrow
 - `itemReturned` -> socket event on return
 
@@ -79,10 +84,12 @@ Production-ready Node.js/Express backend for a laboratory inventory system with 
 
 ### 1) SuperAdmin register/login
 1. `POST /auth/register`:
-   - `name`, `email` = `vanshajbairagi10@gmail.com`, `password`
+   - `name`, `email`, `password`
    - returns `role=superAdmin`, `isApproved=true`
 2. `POST /auth/login` -> get token
 3. Use token for all SuperAdmin routes above.
+4. Use `PUT /auth/password` to change the current password.
+5. Use `POST /users/super-admins` to create additional super-admin accounts.
 
 ### 2) LabAdmin flow
 1. SuperAdmin creates lab `POST /labs`.
@@ -110,17 +117,16 @@ Production-ready Node.js/Express backend for a laboratory inventory system with 
 ## Useful Commands
 - `npm run dev` (nodemon)
 - `npm start` production
-- `npm run seed:demo` loads repeatable demo labs, users, inventory, transactions, and activity logs
 
 ## Quick Curl examples
 ### Register Student
 ```bash
-curl -X POST http://localhost:5000/auth/register -H "Content-Type: application/json" -d '{"name":"John","email":"john@example.com","password":"Secret12"}'
+curl -X POST http://localhost:5000/auth/register -H "Content-Type: application/json" -d '{"name":"<FULL_NAME>","email":"<EMAIL>","password":"<STRONG_PASSWORD>"}'
 ```
 
 ### Login
 ```bash
-curl -X POST http://localhost:5000/auth/login -H "Content-Type: application/json" -d '{"email":"john@example.com","password":"Secret12"}'
+curl -X POST http://localhost:5000/auth/login -H "Content-Type: application/json" -d '{"email":"<EMAIL>","password":"<PASSWORD>"}'
 ```
 
 ### Add inventory (admin)

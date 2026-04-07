@@ -245,6 +245,10 @@ const useAppStore = create((set) => ({
     const response = await api.post('/auth/register', { name, email, password, role: 'storeAdmin' });
     return normalizeUser(getPayload(response.data));
   },
+  createSuperAdmin: async ({ name, email, password }) => {
+    const response = await api.post('/users/super-admins', { name, email, password });
+    return normalizeUser(getPayload(response.data));
+  },
   approveUserAccount: async (userId) => {
     const response = await api.put(`/users/approve/${userId}`);
     return normalizeUser(getPayload(response.data));

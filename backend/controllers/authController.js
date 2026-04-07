@@ -3,9 +3,21 @@ const asyncHandler = require('express-async-handler');
 const User = require('../models/User');
 const ActivityLog = require('../models/ActivityLog');
 
+const SUPER_ADMIN_EMAIL = (process.env.SUPER_ADMIN_EMAIL || '').toLowerCase();
+
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '7d' });
 };
+
+const serializeUser = (user) => ({
+  id: user._id,
+  name: user.name,
+  email: user.email,
+  role: user.role,
+  labId: user.labId,
+  isApproved: user.isApproved,
+  isBlocked: user.isBlocked,
+});
 
 const register = asyncHandler(async (req, res) => {
   const { name, email, password, role, labId } = req.body;
@@ -21,7 +33,7 @@ const register = asyncHandler(async (req, res) => {
     throw new Error('User already exists');
   }
 
-  const isSuperAdmin = email.toLowerCase() === 'vanshajbairagi10@gmail.com';
+  const isSuperAdmin = Boolean(SUPER_ADMIN_EMAIL) && email.toLowerCase() === SUPER_ADMIN_EMAIL;
 
   const user = await User.create({
     name,
@@ -41,13 +53,7 @@ const register = asyncHandler(async (req, res) => {
   res.status(201).json({
     success: true,
     data: {
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      labId: user.labId,
-      isApproved: user.isApproved,
-      isBlocked: user.isBlocked,
+      ...serializeUser(user),
       token: generateToken(user._id),
     },
   });
@@ -74,7 +80,7 @@ const login = asyncHandler(async (req, res) => {
 
   const requiresApproval = ['labAdmin', 'storeAdmin'].includes(user.role);
 
-  if (requiresApproval && user.email.toLowerCase() !== 'vanshajbairagi10@gmail.com' && !user.isApproved) {
+  if (requiresApproval && (!SUPER_ADMIN_EMAIL || user.email.toLowerCase() !== SUPER_ADMIN_EMAIL) && !user.isApproved) {
     res.status(403);
     throw new Error('Account not approved yet');
   }
@@ -88,13 +94,7 @@ const login = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     data: {
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      labId: user.labId,
-      isApproved: user.isApproved,
-      isBlocked: user.isBlocked,
+      ...serializeUser(user),
       token: generateToken(user._id),
     },
   });
@@ -105,16 +105,40 @@ const me = asyncHandler(async (req, res) => {
 
   res.json({
     success: true,
-    data: {
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      labId: user.labId,
-      isApproved: user.isApproved,
-      isBlocked: user.isBlocked,
-    },
+    data: serializeUser(user),
   });
 });
 
-module.exports = { register, login, me };
+const changePassword = asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    res.status(400);
+    throw new Error('Current password and new password are required');
+  }
+
+  const user = await User.findById(req.user._id);
+  if (!user) {
+    res.status(404);
+    throw new Error('User not found');
+  }
+
+  const passwordMatches = await user.comparePassword(currentPassword);
+  if (!passwordMatches) {
+    res.status(400);
+    throw new Error('Current password is incorrect');
+  }
+
+  user.password = newPassword;
+  await user.save();
+
+  await ActivityLog.create({
+    userId: user._id,
+    action: 'change_password',
+    details: `Password changed for ${user.email}`,
+  });
+
+  res.json({ success: true, message: 'Password updated successfully' });
+});
+
+module.exports = { register, login, me, changePassword };

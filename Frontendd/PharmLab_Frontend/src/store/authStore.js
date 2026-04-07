@@ -66,6 +66,18 @@ const useAuthStore = create((set) => ({
       throw new Error(message);
     }
   },
+  changePassword: async ({ currentPassword, newPassword }) => {
+    set({ loading: true, error: null });
+    try {
+      const resp = await api.put('/auth/password', { currentPassword, newPassword });
+      set({ loading: false, error: null });
+      return resp.data?.data || resp.data;
+    } catch (error) {
+      const message = error?.response?.data?.message || 'Password update failed';
+      set({ loading: false, error: message });
+      throw new Error(message);
+    }
+  },
   logout: () => {
     clearAuthSession();
   },

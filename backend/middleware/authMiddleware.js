@@ -2,6 +2,8 @@ const jwt = require('jsonwebtoken');
 const asyncHandler = require('express-async-handler');
 const User = require('../models/User');
 
+const SUPER_ADMIN_EMAIL = (process.env.SUPER_ADMIN_EMAIL || '').toLowerCase();
+
 const authMiddleware = asyncHandler(async (req, res, next) => {
   let token = null;
 
@@ -28,7 +30,7 @@ const authMiddleware = asyncHandler(async (req, res, next) => {
 
     const requiresApproval = ['labAdmin', 'storeAdmin'].includes(user.role);
 
-    if (requiresApproval && user.email !== 'vanshajbairagi10@gmail.com' && !user.isApproved) {
+    if (requiresApproval && (!SUPER_ADMIN_EMAIL || user.email.toLowerCase() !== SUPER_ADMIN_EMAIL) && !user.isApproved) {
       res.status(403);
       throw new Error('Account is not approved');
     }

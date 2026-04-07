@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Clock3, MapPin, PackageCheck, Search, TestTube2 } from 'lucide-react';
+import { Clock3, Info, MapPin, PackageCheck, Search, TestTube2 } from 'lucide-react';
 import useAppStore from '../store/appStore';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -101,7 +101,12 @@ export default function StudentDashboard() {
 
   return (
     <div className='space-y-5 pb-10'>
-      <h2 className='text-xl font-semibold'>Find a lab and borrow equipment</h2>
+      <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
+        <h2 className='text-xl font-semibold'>Find a lab and borrow equipment</h2>
+        <Button variant='outline' onClick={() => navigate('/about')}>
+          <Info size={14} /> About Us
+        </Button>
+      </div>
       <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-3'>
         <Card title='Active Borrowings' subtitle='Pending and approved lab requests'>
           <div className='flex items-center gap-3'>
