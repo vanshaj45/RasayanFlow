@@ -4,6 +4,38 @@ const User = require('../models/User');
 
 const SUPER_ADMIN_EMAIL = (process.env.SUPER_ADMIN_EMAIL || '').toLowerCase();
 
+const ensureConfiguredSuperAdmin = async (user) => {
+  const isConfiguredSuperAdmin =
+    Boolean(SUPER_ADMIN_EMAIL) && user.email.toLowerCase() === SUPER_ADMIN_EMAIL;
+
+  if (!isConfiguredSuperAdmin) {
+    return user;
+  }
+
+  let shouldSave = false;
+
+  if (user.role !== 'superAdmin') {
+    user.role = 'superAdmin';
+    shouldSave = true;
+  }
+
+  if (!user.isApproved) {
+    user.isApproved = true;
+    shouldSave = true;
+  }
+
+  if (user.labId) {
+    user.labId = null;
+    shouldSave = true;
+  }
+
+  if (shouldSave) {
+    await user.save();
+  }
+
+  return user;
+};
+
 const authMiddleware = asyncHandler(async (req, res, next) => {
   let token = null;
 
@@ -33,6 +65,8 @@ const authMiddleware = asyncHandler(async (req, res, next) => {
     res.status(401);
     throw new Error('User not found');
   }
+
+  await ensureConfiguredSuperAdmin(user);
 
   const requiresApproval = ['labAdmin', 'storeAdmin'].includes(user.role);
 

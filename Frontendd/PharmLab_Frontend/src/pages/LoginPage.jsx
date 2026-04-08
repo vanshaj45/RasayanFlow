@@ -12,6 +12,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const message = location.state?.message || '';
+  const campusImageUrl = '/team/Sgsits.avif';
 
   if (user) {
     return <Navigate to='/' replace />;
@@ -31,8 +32,13 @@ export default function LoginPage() {
   };
 
   return (
-    <div className='grid min-h-screen place-items-center bg-[#f6f7ef] px-4 dark:bg-[#1a1d16]'>
-      <div className='w-full max-w-md rounded-2xl border border-[#d9e1ca] bg-[#fffef8] p-8 shadow-soft dark:border-[#414a33] dark:bg-[#20251a]'>
+    <div className='relative grid min-h-screen place-items-center overflow-hidden bg-[#eef1e6] px-4 dark:bg-[#141811]'>
+      <div
+        className='absolute inset-0 bg-cover bg-center bg-no-repeat opacity-50 dark:opacity-50'
+        style={{ backgroundImage: `url(${campusImageUrl})` }}
+        aria-hidden='true'
+      />
+      <div className='relative w-full max-w-md rounded-3xl border border-[#d9e1ca]/80 bg-[#fffef8]/90 p-8 shadow-soft backdrop-blur-sm dark:border-[#414a33] dark:bg-[#20251a]/88'>
         <h1 className='text-2xl font-semibold text-[#3c4e23] dark:text-[#eef4e8]'>Welcome back</h1>
         <p className='text-sm text-[#71805a] dark:text-[#c5d0b5]'>Log in to your account</p>
         <form className='mt-6 space-y-4' onSubmit={handleSubmit}>

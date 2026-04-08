@@ -19,6 +19,38 @@ const serializeUser = (user) => ({
   isBlocked: user.isBlocked,
 });
 
+const ensureConfiguredSuperAdmin = async (user) => {
+  const isConfiguredSuperAdmin =
+    Boolean(SUPER_ADMIN_EMAIL) && user.email.toLowerCase() === SUPER_ADMIN_EMAIL;
+
+  if (!isConfiguredSuperAdmin) {
+    return user;
+  }
+
+  let shouldSave = false;
+
+  if (user.role !== 'superAdmin') {
+    user.role = 'superAdmin';
+    shouldSave = true;
+  }
+
+  if (!user.isApproved) {
+    user.isApproved = true;
+    shouldSave = true;
+  }
+
+  if (user.labId) {
+    user.labId = null;
+    shouldSave = true;
+  }
+
+  if (shouldSave) {
+    await user.save();
+  }
+
+  return user;
+};
+
 const register = asyncHandler(async (req, res) => {
   const { name, email, password, role, labId } = req.body;
 
@@ -72,6 +104,8 @@ const login = asyncHandler(async (req, res) => {
     res.status(401);
     throw new Error('Invalid credentials');
   }
+
+  await ensureConfiguredSuperAdmin(user);
 
   if (user.isBlocked) {
     res.status(403);

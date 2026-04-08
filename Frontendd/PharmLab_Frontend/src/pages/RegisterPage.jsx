@@ -23,7 +23,7 @@ export default function RegisterPage() {
       const message =
         user.role === 'super-admin'
           ? 'Super admin account created. Please sign in.'
-          : 'Account created. Once approved, you can sign in.';
+          : 'Account created. You can now sign in.';
       setSuccess(message);
       setTimeout(() => {
         navigate('/login', { state: { message } });

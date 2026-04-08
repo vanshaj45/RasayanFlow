@@ -11,6 +11,7 @@ const rateLimiter = require('./middleware/rateLimiter');
 const errorHandler = require('./middleware/errorMiddleware');
 const logger = require('./utils/logger');
 const socketHandler = require('./sockets');
+const seedSuperAdmin = require('./scripts/seedSuperAdmin');
 
 dotenv.config({ path: path.join(__dirname, '.env') });
 
@@ -77,7 +78,10 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 5000;
 
 connectDB()
-  .then(() => {
+  .then(async () => {
+    // Seed superAdmin user if configured
+    await seedSuperAdmin();
+    
     server.listen(PORT, () => {
       logger.info(`Server running on port ${PORT}`);
       console.log(`Server running on port ${PORT}`);
