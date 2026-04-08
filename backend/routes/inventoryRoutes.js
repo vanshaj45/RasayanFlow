@@ -3,7 +3,7 @@ const { body, param, query } = require('express-validator');
 const authMiddleware = require('../middleware/authMiddleware');
 const roleMiddleware = require('../middleware/roleMiddleware');
 const validateRequest = require('../middleware/validateMiddleware');
-const { createInventory, updateInventory, deleteInventory, getInventory, getInventoryById, fetchChemicalAbstractForInventory } = require('../controllers/inventoryController');
+const { createInventory, updateInventory, deleteInventory, getInventory, getInventoryById, fetchChemicalAbstractForInventory, fetchChemicalDataForInventory } = require('../controllers/inventoryController');
 
 const router = express.Router();
 
@@ -23,12 +23,20 @@ router.post(
   roleMiddleware(['superAdmin', 'labAdmin']),
   [
     body('labId').isMongoId(),
-    body('itemCode').notEmpty(),
-    body('itemName').notEmpty(),
+    body('itemCode').optional().isString(),
+    body('itemName').optional().isString(),
+    body('chemicalName').notEmpty(),
     body('category').notEmpty(),
     body('quantity').isInt({ min: 0 }),
     body('quantityUnit').notEmpty(),
+    body('costPerUnit').optional().isFloat({ min: 0 }),
     body('minThreshold').isInt({ min: 0 }),
+    body('casNumber').optional().isString(),
+    body('smiles').optional().isString(),
+    body('inchi').optional().isString(),
+    body('chemicalFormula').optional().isString(),
+    body('manufacturingCompany').optional().isString(),
+    body('entryDate').optional({ nullable: true }).isISO8601(),
     body('storageLocation').optional().isString(),
     body('lotNumber').optional().isString(),
     body('expiryDate').optional({ nullable: true }).isISO8601(),
@@ -37,6 +45,16 @@ router.post(
   ],
   validateRequest,
   createInventory,
+);
+
+router.post(
+  '/fetch-pubchem',
+  roleMiddleware(['superAdmin', 'labAdmin']),
+  [
+    body('casNumber').notEmpty().isString(),
+  ],
+  validateRequest,
+  fetchChemicalDataForInventory,
 );
 
 router.post(
@@ -56,10 +74,18 @@ router.put('/:id',
     param('id').isMongoId(),
     body('itemCode').optional().notEmpty(),
     body('itemName').optional().notEmpty(),
+    body('chemicalName').optional().notEmpty(),
     body('category').optional().notEmpty(),
     body('quantity').optional().isInt({ min: 0 }),
     body('quantityUnit').optional().notEmpty(),
+    body('costPerUnit').optional().isFloat({ min: 0 }),
     body('minThreshold').optional().isInt({ min: 0 }),
+    body('casNumber').optional().isString(),
+    body('smiles').optional().isString(),
+    body('inchi').optional().isString(),
+    body('chemicalFormula').optional().isString(),
+    body('manufacturingCompany').optional().isString(),
+    body('entryDate').optional({ nullable: true }).isISO8601(),
     body('storageLocation').optional().isString(),
     body('lotNumber').optional().isString(),
     body('expiryDate').optional({ nullable: true }).isISO8601(),

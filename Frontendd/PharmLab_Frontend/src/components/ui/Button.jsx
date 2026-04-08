@@ -9,9 +9,9 @@ const styles = {
   }
 };
 
-export default function Button({ children, variant = 'primary', className, ...props }) {
+export default function Button({ children, variant = 'primary', className, type = 'button', ...props }) {
   return (
-    <button className={clsx(styles.base, styles.variants[variant], className)} {...props}>
+    <button type={type} className={clsx(styles.base, styles.variants[variant], className)} {...props}>
       {children}
     </button>
   );

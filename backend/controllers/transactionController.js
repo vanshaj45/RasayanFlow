@@ -1,6 +1,7 @@
 const asyncHandler = require('express-async-handler');
 const Inventory = require('../models/Inventory');
 const Transaction = require('../models/Transaction');
+const Experiment = require('../models/Experiment');
 const ActivityLog = require('../models/ActivityLog');
 const { getIo } = require('../sockets');
 
@@ -49,6 +50,11 @@ const borrowItem = asyncHandler(async (req, res) => {
 
   const canAutoApprove = ['superAdmin', 'labAdmin'].includes(req.user.role);
 
+  if (canAutoApprove && item.quantity < quantity) {
+    res.status(400);
+    throw new Error('Not enough inventory to borrow');
+  }
+
   const transaction = await Transaction.create({
     userId: req.user._id,
     labId: item.labId,
@@ -64,11 +70,6 @@ const borrowItem = asyncHandler(async (req, res) => {
   });
 
   if (canAutoApprove) {
-    if (item.quantity < quantity) {
-      res.status(400);
-      throw new Error('Not enough inventory to borrow');
-    }
-
     item.quantity -= quantity;
     item.lastUpdated = new Date();
     await item.save();
@@ -86,6 +87,41 @@ const borrowItem = asyncHandler(async (req, res) => {
   }
 
   res.status(201).json({ success: true, data: { transaction, item } });
+});
+
+const requestExperiment = asyncHandler(async (req, res) => {
+  const { experimentId, purpose, neededUntil, notes } = req.body;
+
+  const experiment = await Experiment.findById(experimentId);
+  if (!experiment) {
+    res.status(404);
+    throw new Error('Experiment not found');
+  }
+
+  const transaction = await Transaction.create({
+    userId: req.user._id,
+    labId: experiment.labId,
+    experimentId: experiment._id,
+    requestCategory: 'experiment',
+    experimentTitle: experiment.title,
+    quantity: 1,
+    type: 'borrow',
+    status: 'pending',
+    purpose: purpose || '',
+    neededUntil: neededUntil || null,
+    requesterName: req.user.name || '',
+    requesterEmail: req.user.email || '',
+    notes: notes || '',
+  });
+
+  await ActivityLog.create({
+    userId: req.user._id,
+    action: 'experiment_request',
+    details: `Requested experiment ${experiment.title}`,
+  });
+  getIo().emit('borrowRequestCreated', { transaction, experiment });
+
+  res.status(201).json({ success: true, data: { transaction, experiment } });
 });
 
 const returnItem = asyncHandler(async (req, res) => {
@@ -144,6 +180,23 @@ const approveBorrowRequest = asyncHandler(async (req, res) => {
     throw new Error('Only pending borrow requests can be approved');
   }
 
+  if (transaction.requestCategory === 'experiment') {
+    transaction.status = 'approved';
+    transaction.reviewedBy = req.user._id;
+    transaction.reviewedAt = new Date();
+    transaction.reviewNotes = reviewNotes || '';
+    await transaction.save();
+
+    await ActivityLog.create({
+      userId: req.user._id,
+      action: 'approve_experiment_request',
+      details: `Approved experiment request for ${transaction.experimentTitle || 'experiment'}`,
+    });
+    getIo().emit('borrowRequestApproved', { transaction });
+
+    return res.json({ success: true, data: { transaction } });
+  }
+
   const item = await Inventory.findById(transaction.itemId._id || transaction.itemId);
   if (!item) {
     res.status(404);
@@ -193,7 +246,11 @@ const rejectBorrowRequest = asyncHandler(async (req, res) => {
   transaction.reviewNotes = reviewNotes || '';
   await transaction.save();
 
-  await ActivityLog.create({ userId: req.user._id, action: 'reject_borrow_request', details: `Rejected borrow request ${transaction._id}` });
+  await ActivityLog.create({
+    userId: req.user._id,
+    action: transaction.requestCategory === 'experiment' ? 'reject_experiment_request' : 'reject_borrow_request',
+    details: transaction.requestCategory === 'experiment' ? `Rejected experiment request ${transaction.experimentTitle || transaction._id}` : `Rejected borrow request ${transaction._id}`,
+  });
   getIo().emit('borrowRequestRejected', { transaction });
 
   res.json({ success: true, data: transaction });
@@ -223,6 +280,7 @@ const getTransactions = asyncHandler(async (req, res) => {
   const records = await Transaction.find(criteria)
     .populate('userId', 'name email')
     .populate('itemId', 'itemName itemCode quantity quantityUnit category')
+    .populate('experimentId', 'title experimentObject totalEstimatedExpense')
     .populate('reviewedBy', 'name email')
     .sort({ timestamp: -1 })
     .skip((Number(page) - 1) * Number(limit))
@@ -231,4 +289,4 @@ const getTransactions = asyncHandler(async (req, res) => {
   res.json({ success: true, data: records, pagination: { total, page: Number(page), limit: Number(limit) } });
 });
 
-module.exports = { borrowItem, returnItem, approveBorrowRequest, rejectBorrowRequest, getTransactions };
+module.exports = { borrowItem, requestExperiment, returnItem, approveBorrowRequest, rejectBorrowRequest, getTransactions };

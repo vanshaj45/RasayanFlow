@@ -17,8 +17,16 @@ const getUsers = asyncHandler(async (req, res) => {
   const { role, labId, page = 1, limit = 20 } = req.query;
   const filter = {};
 
-  if (role) filter.role = role;
-  if (labId) filter.labId = labId;
+  if (req.user.role === 'labAdmin') {
+    filter.role = 'student';
+    filter.labId = req.user.labId || null;
+  } else if (req.user.role === 'storeAdmin') {
+    filter.role = 'student';
+    if (labId) filter.labId = labId;
+  } else {
+    if (role) filter.role = role;
+    if (labId) filter.labId = labId;
+  }
 
   const total = await User.countDocuments(filter);
   const users = await User.find(filter)
@@ -58,6 +66,11 @@ const setUserBlockedState = asyncHandler(async (req, res) => {
   if (user.role !== 'student') {
     res.status(400);
     throw new Error('Only student accounts can be blocked or unblocked');
+  }
+
+  if (req.user.role === 'labAdmin' && String(user.labId || '') !== String(req.user.labId || '')) {
+    res.status(403);
+    throw new Error('Lab admins can only block students in their assigned lab');
   }
 
   user.isBlocked = Boolean(isBlocked);

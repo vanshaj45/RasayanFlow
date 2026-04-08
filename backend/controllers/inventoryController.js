@@ -3,7 +3,24 @@ const Inventory = require('../models/Inventory');
 const ActivityLog = require('../models/ActivityLog');
 const { getIo } = require('../sockets');
 const { getChemicalAbstract } = require('../utils/pubmedService');
+const { fetchChemicalDataByCas } = require('../utils/pubchemService');
 const { decorateInventoryAbstract } = require('../utils/abstractFallbackService');
+
+const buildGeneratedCode = (chemicalName, casNumber = '', manufacturingCompany = '') => {
+  const chemicalChunk = String(chemicalName || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 6);
+  const casChunk = String(casNumber || '')
+    .replace(/[^0-9]/g, '')
+    .slice(-4);
+  const companyChunk = String(manufacturingCompany || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 4);
+  const stamp = Date.now().toString().slice(-4);
+  return `${chemicalChunk || 'CHEM'}${casChunk || '0000'}${companyChunk || 'GEN'}${stamp}`;
+};
 
 const assertLabAdminAccess = (req, res, ownerLabId) => {
   if (req.user.role !== 'labAdmin') return;
@@ -17,10 +34,18 @@ const assertLabAdminAccess = (req, res, ownerLabId) => {
 const buildInventorySnapshot = (item) => ({
   itemCode: item.itemCode,
   itemName: item.itemName,
+  chemicalName: item.chemicalName,
   category: item.category,
   quantity: item.quantity,
   quantityUnit: item.quantityUnit,
+  costPerUnit: item.costPerUnit,
   minThreshold: item.minThreshold,
+  casNumber: item.casNumber || '',
+  smiles: item.smiles || '',
+  inchi: item.inchi || '',
+  chemicalFormula: item.chemicalFormula || '',
+  manufacturingCompany: item.manufacturingCompany || '',
+  entryDate: item.entryDate || null,
   storageLocation: item.storageLocation || '',
   lotNumber: item.lotNumber || '',
   expiryDate: item.expiryDate || null,
@@ -44,10 +69,18 @@ const createInventory = asyncHandler(async (req, res) => {
     labId,
     itemCode,
     itemName,
+    chemicalName,
     category,
     quantity,
     quantityUnit,
+    costPerUnit,
     minThreshold,
+    casNumber,
+    smiles,
+    inchi,
+    chemicalFormula,
+    manufacturingCompany,
+    entryDate,
     storageLocation,
     lotNumber,
     expiryDate,
@@ -55,14 +88,16 @@ const createInventory = asyncHandler(async (req, res) => {
     pubmedId,
   } = req.body;
 
-  if (!labId || !itemCode || !itemName || !category || quantity == null || !quantityUnit || minThreshold == null) {
+  const resolvedChemicalName = chemicalName || itemName;
+
+  if (!labId || !resolvedChemicalName || !category || quantity == null || !quantityUnit || minThreshold == null) {
     res.status(400);
     throw new Error('Missing required fields');
   }
 
   assertLabAdminAccess(req, res, labId);
 
-  const normalizedCode = itemCode.trim().toUpperCase();
+  const normalizedCode = (itemCode?.trim().toUpperCase() || buildGeneratedCode(resolvedChemicalName, casNumber, manufacturingCompany));
   const existingItem = await Inventory.findOne({ labId, itemCode: normalizedCode });
   if (existingItem) {
     res.status(409);
@@ -72,11 +107,19 @@ const createInventory = asyncHandler(async (req, res) => {
   const item = await Inventory.create({
     labId,
     itemCode: normalizedCode,
-    itemName: itemName.trim(),
+    itemName: resolvedChemicalName.trim(),
+    chemicalName: resolvedChemicalName.trim(),
     category: category.trim(),
     quantity,
     quantityUnit: quantityUnit.trim(),
+    costPerUnit: Number(costPerUnit || 0),
     minThreshold,
+    casNumber: casNumber?.trim() || '',
+    smiles: smiles?.trim() || '',
+    inchi: inchi?.trim() || '',
+    chemicalFormula: chemicalFormula?.trim() || '',
+    manufacturingCompany: manufacturingCompany?.trim() || '',
+    entryDate: entryDate || new Date(),
     storageLocation: storageLocation?.trim() || '',
     lotNumber: lotNumber?.trim() || '',
     expiryDate: expiryDate || null,
@@ -131,12 +174,25 @@ const updateInventory = asyncHandler(async (req, res) => {
   }
 
   if (updates.itemName != null) updates.itemName = String(updates.itemName).trim();
+  if (updates.chemicalName != null) {
+    updates.chemicalName = String(updates.chemicalName).trim();
+    updates.itemName = updates.chemicalName;
+  }
   if (updates.category != null) updates.category = String(updates.category).trim();
   if (updates.quantityUnit != null) updates.quantityUnit = String(updates.quantityUnit).trim();
+  if (updates.costPerUnit != null) updates.costPerUnit = Number(updates.costPerUnit);
+  if (updates.casNumber != null) updates.casNumber = String(updates.casNumber).trim();
+  if (updates.smiles != null) updates.smiles = String(updates.smiles).trim();
+  if (updates.inchi != null) updates.inchi = String(updates.inchi).trim();
+  if (updates.chemicalFormula != null) updates.chemicalFormula = String(updates.chemicalFormula).trim();
+  if (updates.manufacturingCompany != null) updates.manufacturingCompany = String(updates.manufacturingCompany).trim();
   if (updates.storageLocation != null) updates.storageLocation = String(updates.storageLocation).trim();
   if (updates.lotNumber != null) updates.lotNumber = String(updates.lotNumber).trim();
   if (updates.abstract != null) updates.abstract = String(updates.abstract).trim();
   if (updates.pubmedId != null) updates.pubmedId = String(updates.pubmedId).trim();
+  if (Object.prototype.hasOwnProperty.call(updates, 'entryDate') && !updates.entryDate) {
+    updates.entryDate = null;
+  }
   if (Object.prototype.hasOwnProperty.call(updates, 'expiryDate') && !updates.expiryDate) {
     updates.expiryDate = null;
   }
@@ -196,7 +252,15 @@ const getInventory = asyncHandler(async (req, res) => {
   } else if (labId) {
     criteria.labId = labId;
   }
-  if (itemName) criteria.itemName = { $regex: itemName, $options: 'i' };
+  if (itemName) {
+    criteria.$or = [
+      { itemName: { $regex: itemName, $options: 'i' } },
+      { chemicalName: { $regex: itemName, $options: 'i' } },
+      { itemCode: { $regex: itemName, $options: 'i' } },
+      { casNumber: { $regex: itemName, $options: 'i' } },
+      { chemicalFormula: { $regex: itemName, $options: 'i' } },
+    ];
+  }
 
   const total = await Inventory.countDocuments(criteria);
   const items = await Inventory.find(criteria)
@@ -264,4 +328,16 @@ const fetchChemicalAbstractForInventory = asyncHandler(async (req, res) => {
   }
 });
 
-module.exports = { createInventory, updateInventory, deleteInventory, getInventory, getInventoryById, fetchChemicalAbstractForInventory };
+const fetchChemicalDataForInventory = asyncHandler(async (req, res) => {
+  const { casNumber } = req.body;
+
+  if (!casNumber || casNumber.trim().length === 0) {
+    res.status(400);
+    throw new Error('CAS number is required');
+  }
+
+  const chemicalData = await fetchChemicalDataByCas(casNumber.trim());
+  res.json({ success: true, data: chemicalData });
+});
+
+module.exports = { createInventory, updateInventory, deleteInventory, getInventory, getInventoryById, fetchChemicalAbstractForInventory, fetchChemicalDataForInventory };

@@ -21,17 +21,41 @@ if (!process.env.JWT_SECRET) {
 const app = express();
 const server = http.createServer(app);
 
-const io = new Server(server, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+const getAllowedOrigins = () => {
+  const configuredOrigins = (process.env.CORS_ORIGIN || process.env.FRONTEND_URL || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  if (configuredOrigins.length) return configuredOrigins;
+
+  return [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+  ];
+};
+
+const allowedOrigins = getAllowedOrigins();
+const corsOptions = {
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error('CORS origin not allowed'));
   },
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  credentials: true,
+};
+
+const io = new Server(server, {
+  cors: corsOptions,
 });
 
 socketHandler(io);
 
 app.use(helmet());
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(morgan('combined', { stream: logger.stream }));
 app.use(rateLimiter);
@@ -40,6 +64,8 @@ app.use(rateLimiter);
 app.use('/auth', require('./routes/authRoutes'));
 app.use('/labs', require('./routes/labRoutes'));
 app.use('/inventory', require('./routes/inventoryRoutes'));
+app.use('/experiments', require('./routes/experimentRoutes'));
+app.use('/experiment-requests', require('./routes/experimentRequestRoutes'));
 app.use('/store-items', require('./routes/storeRoutes'));
 app.use('/store-allotments', require('./routes/storeAllotmentRoutes'));
 app.use('/transactions', require('./routes/transactionRoutes'));

@@ -19,33 +19,35 @@ const authMiddleware = asyncHandler(async (req, res, next) => {
     throw new Error('Not authorized, token missing');
   }
 
+  let decoded;
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id).select('-password');
-
-    if (!user) {
-      res.status(401);
-      throw new Error('User not found');
-    }
-
-    const requiresApproval = ['labAdmin', 'storeAdmin'].includes(user.role);
-
-    if (requiresApproval && (!SUPER_ADMIN_EMAIL || user.email.toLowerCase() !== SUPER_ADMIN_EMAIL) && !user.isApproved) {
-      res.status(403);
-      throw new Error('Account is not approved');
-    }
-
-    if (user.isBlocked) {
-      res.status(403);
-      throw new Error('Account is blocked. Please contact an administrator.');
-    }
-
-    req.user = user;
-    next();
-  } catch (error) {
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
+  } catch {
     res.status(401);
     throw new Error('Not authorized, token invalid');
   }
+
+  const user = await User.findById(decoded.id).select('-password');
+
+  if (!user) {
+    res.status(401);
+    throw new Error('User not found');
+  }
+
+  const requiresApproval = ['labAdmin', 'storeAdmin'].includes(user.role);
+
+  if (requiresApproval && (!SUPER_ADMIN_EMAIL || user.email.toLowerCase() !== SUPER_ADMIN_EMAIL) && !user.isApproved) {
+    res.status(403);
+    throw new Error('Account is not approved');
+  }
+
+  if (user.isBlocked) {
+    res.status(403);
+    throw new Error('Account is blocked. Please contact an administrator.');
+  }
+
+  req.user = user;
+  next();
 });
 
 module.exports = authMiddleware;

@@ -61,13 +61,18 @@ const buildAiFallbackAbstract = (item) => {
 export default function StudentLabDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { labs, inventory, transactions, fetchLabs, fetchInventory, fetchTransactions, createBorrowRequest, setToast } = useAppStore();
+  const { labs, inventory, transactions, experiments, fetchLabs, fetchInventory, fetchTransactions, fetchExperiments, createBorrowRequest, createExperimentRequest, setToast } = useAppStore();
   const user = useAuthStore((state) => state.user);
   const [borrowOpen, setBorrowOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [inventorySearch, setInventorySearch] = useState('');
+  const [experimentSearch, setExperimentSearch] = useState('');
   const [expandedAbstract, setExpandedAbstract] = useState(null);
+  const [requestOpen, setRequestOpen] = useState(false);
+  const [selectedExperiment, setSelectedExperiment] = useState(null);
+  const [requestingExperiment, setRequestingExperiment] = useState(false);
+  const [experimentRequestForm, setExperimentRequestForm] = useState({ purpose: '', preferredDate: '', notes: '' });
   const [borrowForm, setBorrowForm] = useState({
     quantity: '',
     purpose: '',
@@ -78,17 +83,23 @@ export default function StudentLabDetail() {
   useEffect(() => {
     fetchLabs();
     fetchTransactions();
-    if (id) fetchInventory(id);
-  }, [fetchLabs, fetchTransactions, fetchInventory, id]);
+    if (id) {
+      fetchInventory(id);
+      fetchExperiments({ labId: id });
+    }
+  }, [fetchExperiments, fetchLabs, fetchTransactions, fetchInventory, id]);
 
   useEffect(() => {
     const intervalId = setInterval(() => {
       fetchTransactions();
-      if (id) fetchInventory(id);
+      if (id) {
+        fetchInventory(id);
+        fetchExperiments({ labId: id });
+      }
     }, 5000);
 
     return () => clearInterval(intervalId);
-  }, [fetchTransactions, fetchInventory, id]);
+  }, [fetchExperiments, fetchTransactions, fetchInventory, id]);
 
   const lab = useMemo(() => labs.find((entry) => String(entry.id || entry._id) === String(id)), [id, labs]);
 
@@ -103,6 +114,7 @@ export default function StudentLabDetail() {
       return {
         ...item,
         id: item.id || item._id,
+        manufacturingCompanyDisplay: item.manufacturingCompany || 'Not specified',
         quantityDisplay: `${item.quantity} ${item.quantityUnit || 'units'}`,
         expiryDisplay: item.expiryDate ? new Date(item.expiryDate).toLocaleDateString() : 'N/A',
         storageDisplay: item.storageLocation || 'Not specified',
@@ -116,6 +128,19 @@ export default function StudentLabDetail() {
     () => transactions.filter((tx) => String(tx.labId) === String(id) || String(tx.labId?._id) === String(id)),
     [id, transactions]
   );
+
+  const experimentRows = useMemo(() => {
+    const query = experimentSearch.trim().toLowerCase();
+    const labExperiments = experiments.filter((experiment) => String(experiment.labId) === String(id));
+
+    if (!query) return labExperiments;
+
+    return labExperiments.filter((experiment) =>
+      [experiment.title, experiment.experimentObject, experiment.description, ...(experiment.requiredInventory || []).map((entry) => entry.chemicalName)]
+        .filter(Boolean)
+        .some((value) => value.toLowerCase().includes(query))
+    );
+  }, [experimentSearch, experiments, id]);
 
   const openBorrowModal = (item) => {
     setSelectedItem(item);
@@ -141,6 +166,33 @@ export default function StudentLabDetail() {
       setToast({ type: 'error', message: error?.response?.data?.message || 'Failed to submit borrow request.' });
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const openExperimentRequest = (experiment) => {
+    setSelectedExperiment(experiment);
+    setExperimentRequestForm({ purpose: '', preferredDate: '', notes: '' });
+    setRequestOpen(true);
+  };
+
+  const submitExperimentRequest = async () => {
+    if (!selectedExperiment) return;
+
+    setRequestingExperiment(true);
+    try {
+      await createExperimentRequest({
+        experimentId: selectedExperiment.id,
+        purpose: experimentRequestForm.purpose.trim(),
+        preferredDate: experimentRequestForm.preferredDate || null,
+        notes: experimentRequestForm.notes.trim(),
+      });
+      setToast({ type: 'success', message: 'Experiment request submitted for lab admin approval.' });
+      setRequestOpen(false);
+      await fetchTransactions();
+    } catch (error) {
+      setToast({ type: 'error', message: error?.response?.data?.message || 'Failed to submit experiment request.' });
+    } finally {
+      setRequestingExperiment(false);
     }
   };
 
@@ -177,6 +229,53 @@ export default function StudentLabDetail() {
       <div>
         <div className='mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between'>
           <div>
+            <h3 className='text-lg font-semibold'>Experiments In This Lab</h3>
+            <p className='text-sm text-[#71805a] dark:text-[#c5d0b5]'>Only experiments configured for this lab are shown here.</p>
+          </div>
+          <div className='w-full sm:max-w-sm'>
+            <Input
+              label='Search lab experiments'
+              value={experimentSearch}
+              onChange={(e) => setExperimentSearch(e.target.value)}
+              placeholder='Titration, chromatography...'
+            />
+          </div>
+        </div>
+
+        {experimentRows.length ? (
+          <div className='space-y-4'>
+            {experimentRows.map((experiment) => (
+              <div key={experiment.id} className='rounded-xl border border-[#d9e1ca] px-4 py-4 dark:border-[#414a33]'>
+                <div className='flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between'>
+                  <div>
+                    <p className='text-base font-semibold text-[#3c4e23] dark:text-[#eef4e8]'>{experiment.title}</p>
+                    <p className='mt-2 text-sm text-slate-700 dark:text-slate-200'>Object: {experiment.experimentObject}</p>
+                    {experiment.description ? <p className='mt-2 text-sm text-slate-600 dark:text-slate-300'>{experiment.description}</p> : null}
+                    <p className='mt-2 text-sm text-slate-600 dark:text-slate-300'>
+                      Required chemicals: {experiment.requiredInventory.map((entry) => `${entry.chemicalName} (${entry.quantity} ${entry.quantityUnit})`).join(', ') || 'N/A'}
+                    </p>
+                  </div>
+                  <div className='text-left lg:text-right'>
+                    <p className='text-sm font-semibold text-[#3c4e23] dark:text-[#eef4e8]'>Rs. {Number(experiment.totalEstimatedExpense || 0).toFixed(2)}</p>
+                    <p className='mt-1 text-xs text-[#71805a] dark:text-[#c5d0b5]'>Estimated experiment expense</p>
+                    <Button className='mt-3' onClick={() => openExperimentRequest(experiment)}>
+                      Request Complete Experiment
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className='rounded-xl border border-dashed border-[#cfd8bd] px-5 py-8 text-center text-[#71805a] dark:border-[#4e5d35] dark:text-[#c5d0b5]'>
+            No experiments are configured for this lab yet.
+          </div>
+        )}
+      </div>
+
+      <div>
+        <div className='mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between'>
+          <div>
             <h3 className='text-lg font-semibold'>Available Inventory</h3>
             <p className='text-sm text-[#71805a] dark:text-[#c5d0b5]'>Search within this lab by item name, code, category, or storage.</p>
           </div>
@@ -194,6 +293,7 @@ export default function StudentLabDetail() {
           headers={[
             { key: 'name', label: 'Item' },
             { key: 'category', label: 'Category' },
+            { key: 'manufacturingCompanyDisplay', label: 'Company' },
             { key: 'quantityDisplay', label: 'Quantity' },
             { key: 'storageDisplay', label: 'Storage' },
             { key: 'expiryDisplay', label: 'Expiry' },
@@ -285,6 +385,24 @@ export default function StudentLabDetail() {
           <Input label='Additional notes' value={borrowForm.notes} onChange={(e) => setBorrowForm((state) => ({ ...state, notes: e.target.value }))} placeholder='Section, faculty name, handling notes, urgency...' />
           <Button onClick={submitBorrowRequest} className='w-full' disabled={submitting}>
             {submitting ? 'Submitting...' : 'Send Borrow Request'}
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal open={requestOpen} onClose={() => setRequestOpen(false)} title={selectedExperiment ? `Request ${selectedExperiment.title}` : 'Request Experiment'}>
+        <div className='space-y-4'>
+          <div className='rounded-lg border border-[#d9e1ca] bg-[#f9faef] p-3 dark:border-[#414a33] dark:bg-[#1f2419]'>
+            <p className='text-xs font-semibold uppercase text-[#556b2f] dark:text-[#b8c5a0]'>Experiment object</p>
+            <p className='mt-2 text-sm text-[#3c4e23] dark:text-[#eef4e8]'>{selectedExperiment?.experimentObject || 'N/A'}</p>
+            <p className='mt-2 text-xs text-[#71805a] dark:text-[#c5d0b5]'>
+              Required chemicals: {selectedExperiment?.requiredInventory?.map((entry) => `${entry.chemicalName} (${entry.quantity} ${entry.quantityUnit})`).join(', ') || 'N/A'}
+            </p>
+          </div>
+          <Input label='Purpose' value={experimentRequestForm.purpose} onChange={(e) => setExperimentRequestForm((state) => ({ ...state, purpose: e.target.value }))} placeholder='Why do you need this experiment?' />
+          <Input label='Preferred date' type='date' value={experimentRequestForm.preferredDate} onChange={(e) => setExperimentRequestForm((state) => ({ ...state, preferredDate: e.target.value }))} />
+          <Input label='Additional notes' value={experimentRequestForm.notes} onChange={(e) => setExperimentRequestForm((state) => ({ ...state, notes: e.target.value }))} placeholder='Faculty, batch, safety notes...' />
+          <Button className='w-full' onClick={submitExperimentRequest} disabled={requestingExperiment}>
+            {requestingExperiment ? 'Submitting...' : 'Send Experiment Request'}
           </Button>
         </div>
       </Modal>

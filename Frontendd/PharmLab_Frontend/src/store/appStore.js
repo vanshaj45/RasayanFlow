@@ -33,9 +33,17 @@ const normalizeInventoryItem = (item) => ({
   labName: item.labId?.labName || item.labName || '',
   labCode: item.labId?.labCode || item.labCode || '',
   itemCode: item.itemCode || '',
+  chemicalName: item.chemicalName || item.itemName || item.name || 'Unnamed Chemical',
   name: item.name || item.itemName || 'Unnamed Item',
   category: item.category || 'General',
   quantityUnit: item.quantityUnit || item.unit || '',
+  costPerUnit: Number(item.costPerUnit || 0),
+  casNumber: item.casNumber || '',
+  smiles: item.smiles || '',
+  inchi: item.inchi || '',
+  chemicalFormula: item.chemicalFormula || '',
+  manufacturingCompany: item.manufacturingCompany || '',
+  entryDate: item.entryDate || null,
   storageLocation: item.storageLocation || '',
   lotNumber: item.lotNumber || '',
   expiryDate: item.expiryDate || null,
@@ -50,13 +58,34 @@ const normalizeTransaction = (tx) => ({
   ...tx,
   id: tx._id || tx.id,
   status: tx.status || 'pending',
-  itemName: tx.itemName || tx.itemId?.itemName || 'item',
+  requestCategory: tx.requestCategory || 'inventory',
+  experimentTitle: tx.experimentTitle || tx.experimentId?.title || '',
+  itemName: tx.requestCategory === 'experiment' ? (tx.experimentTitle || tx.experimentId?.title || 'Experiment') : (tx.itemName || tx.itemId?.itemName || 'item'),
   itemCode: tx.itemCode || tx.itemId?.itemCode || '',
   requesterName: tx.requesterName || tx.userId?.name || 'Unknown',
   requesterEmail: tx.requesterEmail || tx.userId?.email || '',
   detail:
     tx.detail ||
-    `${tx.type === 'return' ? 'Returned' : tx.status === 'pending' ? 'Requested' : 'Borrowed'} ${tx.quantity || 0} ${tx.itemId?.itemName || 'item'}`
+    `${tx.type === 'return' ? 'Returned' : tx.status === 'pending' ? 'Requested' : 'Borrowed'} ${tx.requestCategory === 'experiment' ? (tx.experimentTitle || tx.experimentId?.title || 'experiment') : (tx.itemId?.itemName || 'item')}`
+});
+
+const normalizeExperiment = (experiment) => ({
+  ...experiment,
+  id: experiment._id || experiment.id,
+  labId: experiment.labId?._id || experiment.labId || null,
+  labName: experiment.labId?.labName || experiment.labName || '',
+  labCode: experiment.labId?.labCode || experiment.labCode || '',
+  requiredInventory: (experiment.requiredInventory || []).map((entry, index) => ({
+    ...entry,
+    id: entry._id || `${experiment._id || experiment.id || 'experiment'}-${index}`,
+    inventoryItemId: entry.inventoryItemId?._id || entry.inventoryItemId || null,
+    inventoryItem: entry.inventoryItemId && typeof entry.inventoryItemId === 'object' ? normalizeInventoryItem(entry.inventoryItemId) : null,
+    chemicalName: entry.chemicalName || entry.inventoryItemId?.chemicalName || entry.inventoryItemId?.itemName || 'Chemical',
+    quantity: Number(entry.quantity || 0),
+    costPerUnit: Number(entry.costPerUnit || entry.inventoryItemId?.costPerUnit || 0),
+    estimatedCost: Number(entry.estimatedCost || 0),
+  })),
+  totalEstimatedExpense: Number(experiment.totalEstimatedExpense || 0),
 });
 
 const normalizeActivityLog = (log) => ({
@@ -107,6 +136,7 @@ const useAppStore = create((set) => ({
   labs: [],
   users: [],
   inventory: [],
+  experiments: [],
   storeItems: [],
   storeAllotments: [],
   transactions: [],
@@ -149,15 +179,23 @@ const useAppStore = create((set) => ({
       transactions: state.transactions.filter((tx) => String(tx.labId) !== String(labId) && String(tx.labId?._id) !== String(labId)),
     }));
   },
-  createInventoryItem: async ({ labId, itemCode, name, category, quantity, quantityUnit, minThreshold = 5, storageLocation = '', lotNumber = '', expiryDate = '', abstract = '', pubmedId = '' }) => {
+  createInventoryItem: async ({ labId, itemCode, chemicalName, name, category, quantity, quantityUnit, costPerUnit = 0, minThreshold = 5, casNumber = '', smiles = '', inchi = '', chemicalFormula = '', manufacturingCompany = '', entryDate = '', storageLocation = '', lotNumber = '', expiryDate = '', abstract = '', pubmedId = '' }) => {
     const response = await api.post('/inventory', {
       labId,
       itemCode,
-      itemName: name,
+      itemName: name || chemicalName,
+      chemicalName: chemicalName || name,
       category,
       quantity: Number(quantity),
       quantityUnit,
+      costPerUnit: Number(costPerUnit),
       minThreshold: Number(minThreshold),
+      casNumber,
+      smiles,
+      inchi,
+      chemicalFormula,
+      manufacturingCompany,
+      entryDate: entryDate || null,
       storageLocation,
       lotNumber,
       expiryDate: expiryDate || null,
@@ -210,6 +248,10 @@ const useAppStore = create((set) => ({
       console.error('Failed to fetch abstract:', error);
       throw error;
     }
+  },
+  fetchChemicalDataByCasForInventory: async (casNumber) => {
+    const response = await api.post('/inventory/fetch-pubchem', { casNumber });
+    return getPayload(response.data);
   },
   createBorrowRequest: async ({ itemId, quantity, purpose, neededUntil, notes = '' }) => {
     const response = await api.post('/transactions/borrow', {
@@ -293,6 +335,44 @@ const useAppStore = create((set) => ({
       set({ loading: false });
       return [];
     }
+  },
+  fetchExperiments: async (filters = {}) => {
+    set({ loading: true });
+    try {
+      const queryParams = new URLSearchParams();
+      if (filters.labId) queryParams.set('labId', filters.labId);
+      if (filters.search) queryParams.set('search', filters.search);
+
+      const query = queryParams.toString() ? `/experiments?${queryParams.toString()}` : '/experiments';
+      const { data } = await api.get(query);
+      const experiments = (getPayload(data) || []).map(normalizeExperiment);
+      set({ experiments, loading: false });
+      return experiments;
+    } catch {
+      set({ experiments: [], loading: false });
+      return [];
+    }
+  },
+  createExperiment: async (payload) => {
+    const response = await api.post('/experiments', payload);
+    const experiment = normalizeExperiment(getPayload(response.data));
+    set((state) => ({ experiments: [experiment, ...state.experiments] }));
+    return experiment;
+  },
+  deleteExperiment: async (experimentId) => {
+    await api.delete(`/experiments/${experimentId}`);
+    set((state) => ({ experiments: state.experiments.filter((entry) => entry.id !== experimentId) }));
+  },
+  createExperimentRequest: async ({ experimentId, purpose, preferredDate, notes = '' }) => {
+    const response = await api.post('/transactions/experiment-request', {
+      experimentId,
+      purpose,
+      neededUntil: preferredDate || null,
+      notes,
+    });
+    const transaction = normalizeTransaction(getPayload(response.data)?.transaction || getPayload(response.data));
+    set((state) => ({ transactions: [transaction, ...state.transactions] }));
+    return transaction;
   },
   fetchStoreItems: async (filters = {}) => {
     set({ loading: true });
@@ -452,6 +532,7 @@ const useAppStore = create((set) => ({
       labs: [],
       users: [],
       inventory: [],
+      experiments: [],
       storeItems: [],
       storeAllotments: [],
       transactions: [],

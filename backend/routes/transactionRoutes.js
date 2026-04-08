@@ -3,7 +3,7 @@ const { body, query } = require('express-validator');
 const authMiddleware = require('../middleware/authMiddleware');
 const roleMiddleware = require('../middleware/roleMiddleware');
 const validateRequest = require('../middleware/validateMiddleware');
-const { borrowItem, returnItem, approveBorrowRequest, rejectBorrowRequest, getTransactions } = require('../controllers/transactionController');
+const { borrowItem, requestExperiment, returnItem, approveBorrowRequest, rejectBorrowRequest, getTransactions } = require('../controllers/transactionController');
 
 const router = express.Router();
 
@@ -21,6 +21,19 @@ router.post(
   ],
   validateRequest,
   borrowItem,
+);
+
+router.post(
+  '/experiment-request',
+  roleMiddleware(['student']),
+  [
+    body('experimentId').isMongoId(),
+    body('purpose').optional().isString(),
+    body('neededUntil').optional({ nullable: true }).isISO8601(),
+    body('notes').optional().isString(),
+  ],
+  validateRequest,
+  requestExperiment,
 );
 
 router.post(

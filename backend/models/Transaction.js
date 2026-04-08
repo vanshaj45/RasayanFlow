@@ -3,7 +3,10 @@ const mongoose = require('mongoose');
 const transactionSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   labId: { type: mongoose.Schema.Types.ObjectId, ref: 'Lab', required: true },
-  itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Inventory', required: true },
+  itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Inventory', default: null },
+  experimentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Experiment', default: null },
+  requestCategory: { type: String, enum: ['inventory', 'experiment'], default: 'inventory' },
+  experimentTitle: { type: String, trim: true, default: '' },
   quantity: { type: Number, required: true, min: 1 },
   type: { type: String, enum: ['borrow', 'return'], required: true },
   status: { type: String, enum: ['pending', 'approved', 'rejected', 'completed'], default: 'pending' },

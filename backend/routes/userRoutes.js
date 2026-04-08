@@ -10,8 +10,8 @@ const router = express.Router();
 router.use(authMiddleware, roleMiddleware(['superAdmin', 'labAdmin', 'storeAdmin']));
 
 router.get('/', [query('page').optional().isInt({ min: 1 }), query('limit').optional().isInt({ min: 1 })], validateRequest, getUsers);
-router.put('/approve/:userId', [param('userId').isMongoId()], validateRequest, approveUser);
-router.put('/block/:userId', roleMiddleware(['superAdmin']), [param('userId').isMongoId(), body('isBlocked').isBoolean(), body('blockedReason').optional().isString()], validateRequest, setUserBlockedState);
+router.put('/approve/:userId', roleMiddleware(['superAdmin']), [param('userId').isMongoId()], validateRequest, approveUser);
+router.put('/block/:userId', roleMiddleware(['superAdmin', 'labAdmin', 'storeAdmin']), [param('userId').isMongoId(), body('isBlocked').isBoolean(), body('blockedReason').optional().isString()], validateRequest, setUserBlockedState);
 router.post(
 	'/super-admins',
 	roleMiddleware(['superAdmin']),

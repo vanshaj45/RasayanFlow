@@ -8,10 +8,7 @@ const connectDB = async () => {
     throw new Error('MONGO_URI is required. Set it in backend/.env');
   }
 
-  await mongoose.connect(uri, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  });
+  await mongoose.connect(uri);
 
   logger.info('MongoDB connected');
 };
