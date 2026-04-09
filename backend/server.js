@@ -83,6 +83,8 @@ const corsOptions = {
     'X-Requested-With',
     'Accept',
     'Origin',
+    'X-Client-Version',
+    'x-client-version',
   ],
   exposedHeaders: ['Content-Length', 'Content-Range'],
   maxAge: 3600, // Cache preflight for 1 hour
