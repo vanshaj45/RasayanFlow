@@ -22,44 +22,96 @@ if (!process.env.JWT_SECRET) {
 const app = express();
 const server = http.createServer(app);
 
+/**
+ * Get allowed origins from environment or defaults
+ * Supports both CORS_ORIGIN and FRONTEND_URL env vars
+ * Format: comma-separated list of origins (no spaces around commas)
+ */
 const getAllowedOrigins = () => {
-  const configuredOrigins = (process.env.CORS_ORIGIN || process.env.FRONTEND_URL || '')
+  const envOrigins = process.env.CORS_ORIGIN || process.env.FRONTEND_URL || '';
+  const productionOrigins = envOrigins
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
 
-  if (configuredOrigins.length) return configuredOrigins;
-
-  return [
+  // Always include localhost variants for development
+  const developmentOrigins = [
+    'http://localhost:3000',
     'http://localhost:5173',
+    'http://127.0.0.1:3000',
     'http://127.0.0.1:5173',
   ];
+
+  // Combine production and development origins
+  const allOrigins = [...new Set([...productionOrigins, ...developmentOrigins])];
+  
+  logger.info(`CORS allowed origins: ${allOrigins.join(', ')}`);
+  return allOrigins;
 };
 
 const allowedOrigins = getAllowedOrigins();
+
+/**
+ * CORS configuration object
+ * - origin: Validates incoming request origin against allowlist
+ * - credentials: Allows cookies and JWT headers to be sent cross-origin
+ * - methods: Explicitly list allowed HTTP methods
+ * - allowedHeaders: Allow common headers including Authorization
+ * - maxAge: Cache preflight response for 1 hour
+ */
 const corsOptions = {
   origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
+    // Allow requests with no origin (e.g., mobile apps, Postman, server-to-server)
+    if (!origin) {
       return callback(null, true);
     }
 
+    // Check if origin is in allowlist
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    // Log rejected origins for debugging
+    logger.warn(`CORS request rejected from origin: ${origin}`);
     return callback(new Error('CORS origin not allowed'));
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+  ],
+  exposedHeaders: ['Content-Length', 'Content-Range'],
+  maxAge: 3600, // Cache preflight for 1 hour
 };
 
+// Apply CORS to Socket.IO
 const io = new Server(server, {
   cors: corsOptions,
 });
 
 socketHandler(io);
 
+// Security headers
 app.use(helmet());
+
+// CORS middleware - apply to all routes
 app.use(cors(corsOptions));
+
+// Pre-flight request handler
+// This ensures OPTIONS requests are handled before hitting rate limiter or other middleware
 app.options('*', cors(corsOptions));
+
+// Body parser
 app.use(express.json());
+
+// Logging
 app.use(morgan('combined', { stream: logger.stream }));
+
+// Rate limiting (applied after CORS so preflight isn't rate limited)
 app.use(rateLimiter);
 
 // Routes
