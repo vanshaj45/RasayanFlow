@@ -1,4 +1,4 @@
-import create from 'zustand';
+import { create } from 'zustand';
 import api from '../services/api';
 import useAppStore from './appStore';
 import { saveToken, saveUser, clearAuthSession, onAuthCleared, getUser, getToken } from '../utils/auth';

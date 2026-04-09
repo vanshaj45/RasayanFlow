@@ -1,4 +1,4 @@
-import create from 'zustand';
+import {create} from 'zustand';
 import api from '../services/api';
 
 const getPayload = (responseData) => responseData?.data ?? responseData;
