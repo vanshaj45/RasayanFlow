@@ -45,7 +45,7 @@ const corsOptions = {
 
     return callback(new Error('CORS origin not allowed'));
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true,
 };
 
@@ -57,6 +57,7 @@ socketHandler(io);
 
 app.use(helmet());
 app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json());
 app.use(morgan('combined', { stream: logger.stream }));
 app.use(rateLimiter);

@@ -11,6 +11,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: CORS_ORIGIN
+        value: https://rasayanflow-1.onrender.com
       - key: MONGO_URI
         scope: project
       - key: JWT_SECRET
@@ -29,9 +31,9 @@ services:
     staticPublishPath: Frontendd/PharmLab_Frontend/dist
     envVars:
       - key: VITE_API_BASE_URL
-        scope: project
+        value: https://pharmlab-backend.onrender.com
       - key: VITE_SOCKET_URL
-        scope: project
+        value: https://pharmlab-backend.onrender.com
       - key: VITE_API_TIMEOUT
         value: 30000
     routes:
