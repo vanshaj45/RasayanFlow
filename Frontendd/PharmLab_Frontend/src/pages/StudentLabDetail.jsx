@@ -61,7 +61,27 @@ const buildAiFallbackAbstract = (item) => {
 export default function StudentLabDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { labs, inventory, transactions, experiments, fetchLabs, fetchInventory, fetchTransactions, fetchExperiments, createBorrowRequest, createExperimentRequest, setToast } = useAppStore();
+  const {
+    labs,
+    inventory,
+    transactions,
+    experiments,
+    teams,
+    eligibleTeamMembers,
+    teamAllotments,
+    fetchLabs,
+    fetchInventory,
+    fetchTransactions,
+    fetchExperiments,
+    fetchTeams,
+    fetchEligibleTeamMembers,
+    fetchTeamAllotments,
+    createTeam,
+    updateTeam,
+    createBorrowRequest,
+    createExperimentRequest,
+    setToast,
+  } = useAppStore();
   const user = useAuthStore((state) => state.user);
   const [borrowOpen, setBorrowOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
@@ -72,7 +92,11 @@ export default function StudentLabDetail() {
   const [requestOpen, setRequestOpen] = useState(false);
   const [selectedExperiment, setSelectedExperiment] = useState(null);
   const [requestingExperiment, setRequestingExperiment] = useState(false);
-  const [experimentRequestForm, setExperimentRequestForm] = useState({ purpose: '', preferredDate: '', notes: '' });
+  const [experimentRequestForm, setExperimentRequestForm] = useState({ purpose: '', preferredDate: '', notes: '', teamId: '' });
+  const [teamModalOpen, setTeamModalOpen] = useState(false);
+  const [editingTeamId, setEditingTeamId] = useState('');
+  const [savingTeam, setSavingTeam] = useState(false);
+  const [teamForm, setTeamForm] = useState({ name: '', memberIds: [] });
   const [borrowForm, setBorrowForm] = useState({
     quantity: '',
     purpose: '',
@@ -86,8 +110,11 @@ export default function StudentLabDetail() {
     if (id) {
       fetchInventory(id);
       fetchExperiments({ labId: id });
+      fetchTeams(id);
+      fetchTeamAllotments({ labId: id });
     }
-  }, [fetchExperiments, fetchLabs, fetchTransactions, fetchInventory, id]);
+    fetchEligibleTeamMembers();
+  }, [fetchEligibleTeamMembers, fetchExperiments, fetchLabs, fetchTeamAllotments, fetchTeams, fetchTransactions, fetchInventory, id]);
 
   useEffect(() => {
     const intervalId = setInterval(() => {
@@ -95,11 +122,13 @@ export default function StudentLabDetail() {
       if (id) {
         fetchInventory(id);
         fetchExperiments({ labId: id });
+        fetchTeams(id);
+        fetchTeamAllotments({ labId: id });
       }
     }, 5000);
 
     return () => clearInterval(intervalId);
-  }, [fetchExperiments, fetchTransactions, fetchInventory, id]);
+  }, [fetchExperiments, fetchTeamAllotments, fetchTeams, fetchTransactions, fetchInventory, id]);
 
   const lab = useMemo(() => labs.find((entry) => String(entry.id || entry._id) === String(id)), [id, labs]);
 
@@ -127,6 +156,32 @@ export default function StudentLabDetail() {
   const myRequests = useMemo(
     () => transactions.filter((tx) => String(tx.labId) === String(id) || String(tx.labId?._id) === String(id)),
     [id, transactions]
+  );
+
+  const myTeams = useMemo(
+    () => teams.filter((team) => String(team.labId) === String(id)),
+    [id, teams]
+  );
+
+  const teamsICanLead = useMemo(
+    () => myTeams.filter((team) => String(team.leaderId) === String(user?.id)),
+    [myTeams, user]
+  );
+
+  const myChemicalShares = useMemo(
+    () =>
+      teamAllotments
+        .map((allotment) => {
+          const myShare = allotment.allocations.find((allocation) => String(allocation.userId) === String(user?.id));
+          return myShare ? { ...allotment, myShareQuantity: myShare.quantity } : null;
+        })
+        .filter(Boolean),
+    [teamAllotments, user]
+  );
+
+  const selectableMembers = useMemo(
+    () => eligibleTeamMembers.filter((member) => String(member.id) !== String(user?.id)),
+    [eligibleTeamMembers, user]
   );
 
   const experimentRows = useMemo(() => {
@@ -171,8 +226,55 @@ export default function StudentLabDetail() {
 
   const openExperimentRequest = (experiment) => {
     setSelectedExperiment(experiment);
-    setExperimentRequestForm({ purpose: '', preferredDate: '', notes: '' });
+    setExperimentRequestForm({ purpose: '', preferredDate: '', notes: '', teamId: '' });
     setRequestOpen(true);
+  };
+
+  const openCreateTeamModal = () => {
+    setEditingTeamId('');
+    setTeamForm({ name: '', memberIds: [] });
+    setTeamModalOpen(true);
+  };
+
+  const openEditTeamModal = (team) => {
+    setEditingTeamId(team.id);
+    setTeamForm({ name: team.name, memberIds: team.members.map((member) => member.id) });
+    setTeamModalOpen(true);
+  };
+
+  const toggleTeamMember = (memberId) => {
+    setTeamForm((state) => ({
+      ...state,
+      memberIds: state.memberIds.includes(memberId)
+        ? state.memberIds.filter((idValue) => idValue !== memberId)
+        : [...state.memberIds, memberId],
+    }));
+  };
+
+  const handleSaveTeam = async () => {
+    if (!teamForm.name.trim()) {
+      setToast({ type: 'error', message: 'Team name is required.' });
+      return;
+    }
+
+    setSavingTeam(true);
+    try {
+      if (editingTeamId) {
+        await updateTeam(editingTeamId, { name: teamForm.name.trim(), memberIds: teamForm.memberIds });
+        setToast({ type: 'success', message: 'Team updated.' });
+      } else {
+        await createTeam({ name: teamForm.name.trim(), labId: id, memberIds: teamForm.memberIds });
+        setToast({ type: 'success', message: 'Team created.' });
+      }
+      await fetchTeams(id);
+      setTeamModalOpen(false);
+      setEditingTeamId('');
+      setTeamForm({ name: '', memberIds: [] });
+    } catch (error) {
+      setToast({ type: 'error', message: error?.response?.data?.message || 'Failed to save team.' });
+    } finally {
+      setSavingTeam(false);
+    }
   };
 
   const submitExperimentRequest = async () => {
@@ -182,11 +284,12 @@ export default function StudentLabDetail() {
     try {
       await createExperimentRequest({
         experimentId: selectedExperiment.id,
+        teamId: experimentRequestForm.teamId || null,
         purpose: experimentRequestForm.purpose.trim(),
         preferredDate: experimentRequestForm.preferredDate || null,
         notes: experimentRequestForm.notes.trim(),
       });
-      setToast({ type: 'success', message: 'Experiment request submitted for lab admin approval.' });
+      setToast({ type: 'success', message: experimentRequestForm.teamId ? 'Team experiment request submitted for lab admin approval.' : 'Experiment request submitted for lab admin approval.' });
       setRequestOpen(false);
       await fetchTransactions();
     } catch (error) {
@@ -269,6 +372,43 @@ export default function StudentLabDetail() {
         ) : (
           <div className='rounded-xl border border-dashed border-[#cfd8bd] px-5 py-8 text-center text-[#71805a] dark:border-[#4e5d35] dark:text-[#c5d0b5]'>
             No experiments are configured for this lab yet.
+          </div>
+        )}
+      </div>
+
+      <div>
+        <div className='mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
+          <div>
+            <h3 className='text-lg font-semibold'>My Teams In This Lab</h3>
+            <p className='text-sm text-[#71805a] dark:text-[#c5d0b5]'>Build a team of any size, then request experiments as the team leader.</p>
+          </div>
+          <Button variant='outline' onClick={openCreateTeamModal}>Create Team</Button>
+        </div>
+
+        {myTeams.length ? (
+          <div className='space-y-4'>
+            {myTeams.map((team) => (
+              <div key={team.id} className='rounded-xl border border-[#d9e1ca] px-4 py-4 dark:border-[#414a33]'>
+                <div className='flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between'>
+                  <div>
+                    <p className='text-base font-semibold text-[#3c4e23] dark:text-[#eef4e8]'>{team.name}</p>
+                    <p className='mt-1 text-sm text-slate-600 dark:text-slate-300'>Leader: {team.leaderName || 'N/A'} • Members: {team.memberCount}</p>
+                    <p className='mt-2 text-sm text-slate-600 dark:text-slate-300'>
+                      {team.members.length ? team.members.map((member) => member.name || member.email).join(', ') : 'No extra members yet'}
+                    </p>
+                  </div>
+                  {String(team.leaderId) === String(user?.id) ? (
+                    <Button variant='outline' onClick={() => openEditTeamModal(team)} className='px-3 py-1 text-xs'>
+                      Manage Team
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className='rounded-xl border border-dashed border-[#cfd8bd] px-5 py-8 text-center text-[#71805a] dark:border-[#4e5d35] dark:text-[#c5d0b5]'>
+            No teams created for you in this lab yet.
           </div>
         )}
       </div>
@@ -398,6 +538,19 @@ export default function StudentLabDetail() {
               Required chemicals: {selectedExperiment?.requiredInventory?.map((entry) => `${entry.chemicalName} (${entry.quantity} ${entry.quantityUnit})`).join(', ') || 'N/A'}
             </p>
           </div>
+          <label className='relative block text-sm text-[#4e5d35] dark:text-[#d5ddbf]'>
+            <span className='mb-1 block text-xs font-medium tracking-wide'>Request mode</span>
+            <select
+              value={experimentRequestForm.teamId}
+              onChange={(e) => setExperimentRequestForm((state) => ({ ...state, teamId: e.target.value }))}
+              className='w-full rounded-lg border border-[#cfd8bd] bg-white px-3 py-2 text-[#3c4e23] focus:outline-none focus:ring-2 focus:ring-[#6f7d45] dark:border-[#4e5d35] dark:bg-[#20251a] dark:text-[#eef4e8]'
+            >
+              <option value=''>Individual request</option>
+              {teamsICanLead.map((team) => (
+                <option key={team.id} value={team.id}>{team.name} ({team.memberCount} members)</option>
+              ))}
+            </select>
+          </label>
           <Input label='Purpose' value={experimentRequestForm.purpose} onChange={(e) => setExperimentRequestForm((state) => ({ ...state, purpose: e.target.value }))} placeholder='Why do you need this experiment?' />
           <Input label='Preferred date' type='date' value={experimentRequestForm.preferredDate} onChange={(e) => setExperimentRequestForm((state) => ({ ...state, preferredDate: e.target.value }))} />
           <Input label='Additional notes' value={experimentRequestForm.notes} onChange={(e) => setExperimentRequestForm((state) => ({ ...state, notes: e.target.value }))} placeholder='Faculty, batch, safety notes...' />
@@ -407,11 +560,47 @@ export default function StudentLabDetail() {
         </div>
       </Modal>
 
+      <Modal open={teamModalOpen} onClose={() => setTeamModalOpen(false)} title={editingTeamId ? 'Manage Team' : 'Create Team'}>
+        <div className='space-y-4'>
+          <Input label='Team name' value={teamForm.name} onChange={(e) => setTeamForm((state) => ({ ...state, name: e.target.value }))} placeholder='Analytical Chemistry Batch A' />
+          <div className='rounded-lg border border-[#d9e1ca] bg-[#f9faef] p-3 dark:border-[#414a33] dark:bg-[#1f2419]'>
+            <p className='text-xs font-semibold uppercase text-[#556b2f] dark:text-[#b8c5a0]'>Select Members</p>
+            <p className='mt-1 text-xs text-[#71805a] dark:text-[#c5d0b5]'>You are always included as team leader. Add any number of approved students below.</p>
+            <div className='mt-3 max-h-64 space-y-2 overflow-y-auto'>
+              {selectableMembers.length ? selectableMembers.map((member) => (
+                <label key={member.id} className='flex items-center gap-3 rounded-lg border border-[#d9e1ca] bg-white px-3 py-2 text-sm text-[#3c4e23] dark:border-[#414a33] dark:bg-[#20251a] dark:text-[#eef4e8]'>
+                  <input type='checkbox' checked={teamForm.memberIds.includes(member.id)} onChange={() => toggleTeamMember(member.id)} />
+                  <span>{member.name || member.email} <span className='text-xs text-[#71805a] dark:text-[#c5d0b5]'>({member.email})</span></span>
+                </label>
+              )) : <p className='text-sm text-[#71805a] dark:text-[#c5d0b5]'>No eligible students found right now.</p>}
+            </div>
+          </div>
+          <Button className='w-full' onClick={handleSaveTeam} disabled={savingTeam}>
+            {savingTeam ? 'Saving...' : editingTeamId ? 'Save Team' : 'Create Team'}
+          </Button>
+        </div>
+      </Modal>
+
+      <div>
+        <h3 className='mb-3 text-lg font-semibold'>My Chemical Shares</h3>
+        <Table
+          headers={[
+            { key: 'experimentTitle', label: 'Experiment' },
+            { key: 'teamName', label: 'Team' },
+            { key: 'chemicalName', label: 'Chemical' },
+            { key: 'myShare', label: 'My Share', render: (row) => `${row.myShareQuantity} ${row.quantityUnit}` },
+            { key: 'total', label: 'Total Used', render: (row) => `${row.totalQuantity} ${row.quantityUnit}` },
+          ]}
+          rows={myChemicalShares}
+        />
+      </div>
+
       <div>
         <h3 className='mb-3 text-lg font-semibold'>My Borrow Requests</h3>
         <Table
           headers={[
             { key: 'itemName', label: 'Item' },
+            { key: 'teamName', label: 'Team', render: (row) => row.teamName || '--' },
             { key: 'quantityDisplay', label: 'Qty' },
             { key: 'purpose', label: 'Purpose' },
             { key: 'neededUntilDisplay', label: 'Needed Until' },
@@ -435,7 +624,7 @@ export default function StudentLabDetail() {
           ]}
           rows={myRequests.map((tx) => ({
             ...tx,
-            quantityDisplay: `${tx.quantity} ${tx.itemId?.quantityUnit || ''}`.trim(),
+            quantityDisplay: tx.requestCategory === 'experiment' ? `${tx.memberCount || 1} participant${Number(tx.memberCount || 1) > 1 ? 's' : ''}` : `${tx.quantity} ${tx.itemId?.quantityUnit || ''}`.trim(),
             neededUntilDisplay: tx.neededUntil ? new Date(tx.neededUntil).toLocaleDateString() : 'N/A',
           }))}
         />

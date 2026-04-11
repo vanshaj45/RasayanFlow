@@ -28,6 +28,7 @@ router.post(
   roleMiddleware(['student']),
   [
     body('experimentId').isMongoId(),
+    body('teamId').optional({ nullable: true }).isMongoId(),
     body('purpose').optional().isString(),
     body('neededUntil').optional({ nullable: true }).isISO8601(),
     body('notes').optional().isString(),

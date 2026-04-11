@@ -125,6 +125,7 @@ app.use('/experiment-requests', require('./routes/experimentRequestRoutes'));
 app.use('/store-items', require('./routes/storeRoutes'));
 app.use('/store-allotments', require('./routes/storeAllotmentRoutes'));
 app.use('/transactions', require('./routes/transactionRoutes'));
+app.use('/teams', require('./routes/teamRoutes'));
 app.use('/users', require('./routes/userRoutes'));
 app.use('/logs', require('./routes/logRoutes'));
 

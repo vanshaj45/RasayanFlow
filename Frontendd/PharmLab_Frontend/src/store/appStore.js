@@ -59,6 +59,14 @@ const normalizeTransaction = (tx) => ({
   id: tx._id || tx.id,
   status: tx.status || 'pending',
   requestCategory: tx.requestCategory || 'inventory',
+  teamId: tx.teamId?._id || tx.teamId || null,
+  teamName: tx.teamId?.name || tx.teamName || '',
+  memberCount: Number(tx.memberCount || tx.participantIds?.length || 1),
+  participantIds: (tx.participantIds || []).map((participant) => ({
+    id: participant?._id || participant?.id || participant,
+    name: participant?.name || '',
+    email: participant?.email || '',
+  })),
   experimentTitle: tx.experimentTitle || tx.experimentId?.title || '',
   itemName: tx.requestCategory === 'experiment' ? (tx.experimentTitle || tx.experimentId?.title || 'Experiment') : (tx.itemName || tx.itemId?.itemName || 'item'),
   itemCode: tx.itemCode || tx.itemId?.itemCode || '',
@@ -132,11 +140,61 @@ const normalizeStoreAllotment = (entry) => ({
   timestamp: entry.timestamp || null,
 });
 
+const normalizeTeam = (team) => {
+  const leader = team.leaderId && typeof team.leaderId === 'object' ? team.leaderId : null;
+  const members = (team.memberIds || []).map((member) => ({
+    ...member,
+    id: member._id || member.id,
+  }));
+
+  return {
+    ...team,
+    id: team._id || team.id,
+    labId: team.labId?._id || team.labId || null,
+    labName: team.labId?.labName || '',
+    name: team.name || 'Untitled Team',
+    leaderId: leader?._id || leader?.id || team.leaderId || null,
+    leaderName: leader?.name || '',
+    leaderEmail: leader?.email || '',
+    members,
+    participantIds: Array.from(new Set([leader?._id || leader?.id || team.leaderId, ...members.map((member) => member.id)].filter(Boolean))),
+    memberCount: Array.from(new Set([leader?._id || leader?.id || team.leaderId, ...members.map((member) => member.id)].filter(Boolean))).length,
+    canRequestExperiments: Boolean(team.canRequestExperiments ?? true),
+    status: team.status || 'active',
+  };
+};
+
+const normalizeTeamAllotment = (entry) => ({
+  ...entry,
+  id: entry._id || entry.id,
+  requestTransactionId: entry.requestTransactionId?._id || entry.requestTransactionId || null,
+  experimentId: entry.experimentId?._id || entry.experimentId || null,
+  experimentTitle: entry.experimentId?.title || entry.experimentTitle || 'Experiment',
+  teamId: entry.teamId?._id || entry.teamId || null,
+  teamName: entry.teamId?.name || entry.teamName || 'Individual request',
+  inventoryItemId: entry.inventoryItemId?._id || entry.inventoryItemId || null,
+  chemicalName: entry.chemicalName || entry.inventoryItemId?.chemicalName || entry.inventoryItemId?.itemName || 'Chemical',
+  quantityUnit: entry.quantityUnit || entry.inventoryItemId?.quantityUnit || 'units',
+  totalQuantity: Number(entry.totalQuantity || 0),
+  perMemberQuantity: Number(entry.perMemberQuantity || 0),
+  memberCount: Number(entry.memberCount || 1),
+  allocations: (entry.allocations || []).map((allocation) => ({
+    userId: allocation.userId?._id || allocation.userId || null,
+    userName: allocation.userId?.name || '',
+    userEmail: allocation.userId?.email || '',
+    quantity: Number(allocation.quantity || 0),
+  })),
+  createdAt: entry.createdAt || null,
+});
+
 const useAppStore = create((set) => ({
   labs: [],
   users: [],
   inventory: [],
   experiments: [],
+  teams: [],
+  eligibleTeamMembers: [],
+  teamAllotments: [],
   storeItems: [],
   storeAllotments: [],
   transactions: [],
@@ -363,9 +421,47 @@ const useAppStore = create((set) => ({
     await api.delete(`/experiments/${experimentId}`);
     set((state) => ({ experiments: state.experiments.filter((entry) => entry.id !== experimentId) }));
   },
-  createExperimentRequest: async ({ experimentId, purpose, preferredDate, notes = '' }) => {
+  fetchTeams: async (labId) => {
+    const query = labId ? `/teams?labId=${labId}` : '/teams';
+    const response = await api.get(query);
+    const teams = (getPayload(response.data) || []).map(normalizeTeam);
+    set({ teams });
+    return teams;
+  },
+  fetchEligibleTeamMembers: async () => {
+    const response = await api.get('/teams/eligible-members');
+    const eligibleTeamMembers = (getPayload(response.data) || []).map(normalizeUser);
+    set({ eligibleTeamMembers });
+    return eligibleTeamMembers;
+  },
+  createTeam: async ({ name, labId, memberIds = [] }) => {
+    const response = await api.post('/teams', { name, labId, memberIds });
+    const team = normalizeTeam(getPayload(response.data));
+    set((state) => ({ teams: [team, ...state.teams.filter((entry) => entry.id !== team.id)] }));
+    return team;
+  },
+  updateTeam: async (teamId, payload) => {
+    const response = await api.put(`/teams/${teamId}`, payload);
+    const team = normalizeTeam(getPayload(response.data));
+    set((state) => ({
+      teams: state.teams.map((entry) => (entry.id === team.id ? team : entry)),
+    }));
+    return team;
+  },
+  fetchTeamAllotments: async (filters = {}) => {
+    const queryParams = new URLSearchParams();
+    if (filters.labId) queryParams.set('labId', filters.labId);
+    if (filters.teamId) queryParams.set('teamId', filters.teamId);
+    const query = queryParams.toString() ? `/teams/allotments?${queryParams.toString()}` : '/teams/allotments';
+    const response = await api.get(query);
+    const teamAllotments = (getPayload(response.data) || []).map(normalizeTeamAllotment);
+    set({ teamAllotments });
+    return teamAllotments;
+  },
+  createExperimentRequest: async ({ experimentId, teamId = null, purpose, preferredDate, notes = '' }) => {
     const response = await api.post('/transactions/experiment-request', {
       experimentId,
+      teamId,
       purpose,
       neededUntil: preferredDate || null,
       notes,
@@ -533,6 +629,9 @@ const useAppStore = create((set) => ({
       users: [],
       inventory: [],
       experiments: [],
+      teams: [],
+      eligibleTeamMembers: [],
+      teamAllotments: [],
       storeItems: [],
       storeAllotments: [],
       transactions: [],

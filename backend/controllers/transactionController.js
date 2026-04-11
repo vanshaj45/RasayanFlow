@@ -2,8 +2,60 @@ const asyncHandler = require('express-async-handler');
 const Inventory = require('../models/Inventory');
 const Transaction = require('../models/Transaction');
 const Experiment = require('../models/Experiment');
+const Team = require('../models/Team');
+const TeamAllotment = require('../models/TeamAllotment');
+const User = require('../models/User');
 const ActivityLog = require('../models/ActivityLog');
 const { getIo } = require('../sockets');
+
+const roundQuantity = (value) => Number(Number(value || 0).toFixed(4));
+
+const getTeamParticipants = async (teamId, currentUserId, labId) => {
+  if (!teamId) {
+    return {
+      team: null,
+      participants: [String(currentUserId)],
+      teamName: '',
+      memberCount: 1,
+    };
+  }
+
+  const team = await Team.findById(teamId);
+  if (!team || team.status !== 'active') {
+    throw new Error('Team not found');
+  }
+
+  if (String(team.labId) !== String(labId)) {
+    throw new Error('Selected team does not belong to this lab');
+  }
+
+  if (String(team.leaderId) !== String(currentUserId)) {
+    throw new Error('Only the team leader can request an experiment for this team');
+  }
+
+  const participants = Array.from(new Set([String(team.leaderId), ...team.memberIds.map((memberId) => String(memberId))]));
+  if (!participants.length) {
+    throw new Error('Team must have at least one member');
+  }
+
+  const approvedMembers = await User.find({
+    _id: { $in: participants },
+    role: 'student',
+    isBlocked: false,
+    isApproved: true,
+  }).select('_id');
+
+  if (approvedMembers.length !== participants.length) {
+    throw new Error('All team members must be approved and active students');
+  }
+
+  return {
+    team,
+    participants,
+    teamName: team.name,
+    memberCount: participants.length,
+  };
+};
 
 const getBorrowReturnBalance = async (userId, itemId) => {
   const [approvedBorrow, returned] = await Promise.all([
@@ -90,7 +142,7 @@ const borrowItem = asyncHandler(async (req, res) => {
 });
 
 const requestExperiment = asyncHandler(async (req, res) => {
-  const { experimentId, purpose, neededUntil, notes } = req.body;
+  const { experimentId, teamId, purpose, neededUntil, notes } = req.body;
 
   const experiment = await Experiment.findById(experimentId);
   if (!experiment) {
@@ -98,10 +150,16 @@ const requestExperiment = asyncHandler(async (req, res) => {
     throw new Error('Experiment not found');
   }
 
+  const { team, participants, teamName, memberCount } = await getTeamParticipants(teamId, req.user._id, experiment.labId);
+
   const transaction = await Transaction.create({
     userId: req.user._id,
     labId: experiment.labId,
     experimentId: experiment._id,
+    teamId: team?._id || null,
+    teamName,
+    participantIds: participants,
+    memberCount,
     requestCategory: 'experiment',
     experimentTitle: experiment.title,
     quantity: 1,
@@ -116,8 +174,8 @@ const requestExperiment = asyncHandler(async (req, res) => {
 
   await ActivityLog.create({
     userId: req.user._id,
-    action: 'experiment_request',
-    details: `Requested experiment ${experiment.title}`,
+    action: team ? 'team_experiment_request' : 'experiment_request',
+    details: team ? `Requested experiment ${experiment.title} for team ${team.name}` : `Requested experiment ${experiment.title}`,
   });
   getIo().emit('borrowRequestCreated', { transaction, experiment });
 
@@ -169,7 +227,9 @@ const approveBorrowRequest = asyncHandler(async (req, res) => {
   const { transactionId } = req.params;
   const { reviewNotes } = req.body;
 
-  const transaction = await Transaction.findById(transactionId).populate('itemId');
+  const transaction = await Transaction.findById(transactionId)
+    .populate('itemId')
+    .populate('experimentId');
   if (!transaction) {
     res.status(404);
     throw new Error('Transaction not found');
@@ -181,6 +241,69 @@ const approveBorrowRequest = asyncHandler(async (req, res) => {
   }
 
   if (transaction.requestCategory === 'experiment') {
+    const experiment = await Experiment.findById(transaction.experimentId?._id || transaction.experimentId).populate('requiredInventory.inventoryItemId');
+    if (!experiment) {
+      res.status(404);
+      throw new Error('Experiment not found');
+    }
+
+    const participantIds = transaction.participantIds?.length
+      ? transaction.participantIds.map((participantId) => String(participantId))
+      : [String(transaction.userId)];
+    const memberCount = participantIds.length || 1;
+
+    for (const requirement of experiment.requiredInventory) {
+      const inventoryItemId = requirement.inventoryItemId?._id || requirement.inventoryItemId;
+      const inventoryItem = await Inventory.findById(inventoryItemId);
+      if (!inventoryItem) {
+        res.status(404);
+        throw new Error(`Inventory item for ${requirement.chemicalName} not found`);
+      }
+
+      if (inventoryItem.quantity < requirement.quantity) {
+        res.status(400);
+        throw new Error(`Not enough inventory to approve ${requirement.chemicalName}`);
+      }
+    }
+
+    const allotments = [];
+    for (const requirement of experiment.requiredInventory) {
+      const inventoryItemId = requirement.inventoryItemId?._id || requirement.inventoryItemId;
+      const inventoryItem = await Inventory.findById(inventoryItemId);
+
+      inventoryItem.quantity -= requirement.quantity;
+      inventoryItem.lastUpdated = new Date();
+      await inventoryItem.save();
+
+      const totalQuantity = Number(requirement.quantity || 0);
+      const perMemberQuantity = roundQuantity(totalQuantity / memberCount);
+      const allocatedTotal = roundQuantity(perMemberQuantity * memberCount);
+      const remainder = roundQuantity(totalQuantity - allocatedTotal);
+
+      const allocations = participantIds.map((participantId, index) => ({
+        userId: participantId,
+        quantity: roundQuantity(perMemberQuantity + (index === 0 ? remainder : 0)),
+      }));
+
+      const allotment = await TeamAllotment.create({
+        requestTransactionId: transaction._id,
+        experimentId: experiment._id,
+        teamId: transaction.teamId || null,
+        teamName: transaction.teamName || '',
+        labId: transaction.labId,
+        inventoryItemId,
+        chemicalName: requirement.chemicalName,
+        totalQuantity,
+        quantityUnit: requirement.quantityUnit,
+        memberCount,
+        perMemberQuantity,
+        allocations,
+        allocatedBy: req.user._id,
+      });
+      allotments.push(allotment);
+      getIo().emit('inventory.updated', { action: 'borrow', item: inventoryItem });
+    }
+
     transaction.status = 'approved';
     transaction.reviewedBy = req.user._id;
     transaction.reviewedAt = new Date();
@@ -190,11 +313,13 @@ const approveBorrowRequest = asyncHandler(async (req, res) => {
     await ActivityLog.create({
       userId: req.user._id,
       action: 'approve_experiment_request',
-      details: `Approved experiment request for ${transaction.experimentTitle || 'experiment'}`,
+      details: transaction.teamName
+        ? `Approved experiment request for ${transaction.experimentTitle || 'experiment'} and split chemicals across ${transaction.memberCount || memberCount} team members`
+        : `Approved experiment request for ${transaction.experimentTitle || 'experiment'}`,
     });
-    getIo().emit('borrowRequestApproved', { transaction });
+    getIo().emit('borrowRequestApproved', { transaction, allotments });
 
-    return res.json({ success: true, data: { transaction } });
+    return res.json({ success: true, data: { transaction, allotments } });
   }
 
   const item = await Inventory.findById(transaction.itemId._id || transaction.itemId);
@@ -261,7 +386,7 @@ const getTransactions = asyncHandler(async (req, res) => {
   const criteria = {};
 
   if (req.user.role === 'student') {
-    criteria.userId = req.user._id;
+    criteria.$or = [{ userId: req.user._id }, { participantIds: req.user._id }];
   } else {
     if (labId) criteria.labId = labId;
     if (userId) criteria.userId = userId;
@@ -279,8 +404,10 @@ const getTransactions = asyncHandler(async (req, res) => {
   const total = await Transaction.countDocuments(criteria);
   const records = await Transaction.find(criteria)
     .populate('userId', 'name email')
+    .populate('participantIds', 'name email')
     .populate('itemId', 'itemName itemCode quantity quantityUnit category')
     .populate('experimentId', 'title experimentObject totalEstimatedExpense')
+    .populate('teamId', 'name leaderId memberIds')
     .populate('reviewedBy', 'name email')
     .sort({ timestamp: -1 })
     .skip((Number(page) - 1) * Number(limit))
