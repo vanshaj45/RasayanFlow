@@ -359,9 +359,7 @@ export default function StudentLabDetail() {
                     </p>
                   </div>
                   <div className='text-left lg:text-right'>
-                    <p className='text-sm font-semibold text-[#3c4e23] dark:text-[#eef4e8]'>Rs. {Number(experiment.totalEstimatedExpense || 0).toFixed(2)}</p>
-                    <p className='mt-1 text-xs text-[#71805a] dark:text-[#c5d0b5]'>Estimated experiment expense</p>
-                    <Button className='mt-3' onClick={() => openExperimentRequest(experiment)}>
+                    <Button className='mt-3 lg:mt-0' onClick={() => openExperimentRequest(experiment)}>
                       Request Complete Experiment
                     </Button>
                   </div>
