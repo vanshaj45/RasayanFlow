@@ -122,10 +122,12 @@ export default function Sidebar({ collapsed }) {
 
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-20 overflow-y-auto border-r border-[#d9e1ca] bg-[#fdfdf7] pt-6 pb-6 transition-all duration-300 dark:border-[#3c452f] dark:bg-[#1c2117] ${collapsed ? "-translate-x-full md:translate-x-0 md:w-20 md:px-3" : "translate-x-0 w-72 px-4"}`}
+      className={`fixed inset-y-0 left-0 z-20 overflow-y-auto border-r border-[#d9e1ca] bg-[#fdfdf7] pt-5 pb-6 transition-all duration-300 dark:border-[#3c452f] dark:bg-[#1c2117] ${
+        collapsed ? "-translate-x-full md:translate-x-0 md:w-20 md:px-2.5" : "translate-x-0 w-72 px-3.5"
+      }`}
     >
-      <div className={`mb-8 flex px-1 ${collapsed ? "md:justify-center" : "items-center gap-3"}`}>
-        <div className="h-11 w-11 shrink-0 overflow-hidden rounded-[10px] border border-[#d9e1ca] bg-[#f4f5eb] dark:border-[#3c452f] dark:bg-[#28301f]">
+      <div className={`mb-6 flex ${collapsed ? "md:justify-center" : "items-center gap-3 px-2 pb-5 border-b border-[#e8efd9] dark:border-[#2e3d19]"}`}>
+        <div className="h-11 w-11 shrink-0 overflow-hidden rounded-xl border border-[#cfd8bd] bg-[#f4f5eb] shadow-sm dark:border-[#414a33] dark:bg-[#28301f]">
           <img
             src="/RasayanFlow_logo.png"
             alt="RasayanFlow Logo"
@@ -133,18 +135,18 @@ export default function Sidebar({ collapsed }) {
           />
         </div>
         {!collapsed ? (
-          <div className="flex flex-col gap-0.5 min-w-0">
-            <p className="text-[15px] font-semibold leading-tight tracking-tight text-[#2e3d19] dark:text-[#eef4e8] truncate">
+          <div className="flex flex-col min-w-0">
+            <p className="text-base font-bold leading-tight tracking-tight text-[#2e3d19] dark:text-[#eef4e8] truncate">
               RasayanFlow
             </p>
-            <span className="inline-flex w-fit items-center rounded-full bg-[#e8efd9] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.4px] text-[#4a6022] dark:bg-[#2a3320] dark:text-[#a8be8a]">
+            <span className="mt-1 inline-flex w-fit items-center rounded-md bg-[#eef4e4] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#556b2f] dark:bg-[#28301f] dark:text-[#a8be8a]">
               {role.replace(/-/g, " ")}
             </span>
           </div>
         ) : null}
       </div>
 
-      <nav className="space-y-1">
+      <nav className="space-y-1.5 w-full">
         {linksMap[navRole]?.map((item) => {
           const Icon = item.icon;
           return (
@@ -153,18 +155,24 @@ export default function Sidebar({ collapsed }) {
               to={item.to}
               title={collapsed ? item.label : undefined}
               className={({ isActive }) =>
-                `group flex items-center justify-between rounded-xl px-3 py-2 text-sm font-medium transition ${collapsed ? "md:justify-center" : "gap-2"} ${isActive ? "bg-[#556b2f] text-[#f0f4e8]" : "text-[#4e5d35] hover:bg-[#f4f6ee] dark:text-[#d5ddbf] dark:hover:bg-[#28301f]"}`
+                `group flex w-full items-center justify-between rounded-xl px-3.5 py-3 text-[14.5px] font-medium transition-all duration-200 ${
+                  collapsed ? "md:justify-center md:px-2" : "gap-3"
+                } ${
+                  isActive
+                    ? "bg-[#556b2f] text-white shadow-md font-bold dark:bg-[#556b2f] dark:text-[#f4f7ee]"
+                    : "text-[#3c4e23] hover:bg-[#ebf1e1] hover:text-[#1f2b10] dark:text-[#c5d0b5] dark:hover:bg-[#27311f] dark:hover:text-[#f4f7ee]"
+                }`
               }
             >
-              <div className="flex items-center gap-2">
-                <Icon size={16} className="shrink-0" />
-                {!collapsed ? item.label : null}
+              <div className="flex items-center gap-3 min-w-0">
+                <Icon size={19} className="shrink-0 transition-transform duration-200 group-hover:scale-110" />
+                {!collapsed ? <span className="truncate">{item.label}</span> : null}
               </div>
               {!collapsed && item.to === "/store/lowstock" && lowStockCount > 0 ? (
-                <span className="bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{lowStockCount}</span>
+                <span className="bg-rose-500 text-white text-xs font-bold px-2 py-0.5 rounded-full shadow-sm">{lowStockCount}</span>
               ) : null}
               {!collapsed && item.to === "/lab/store-requests" && storeRequestsCount > 0 ? (
-                <span className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-500 text-[10px] font-bold px-2 py-0.5 rounded-full">{storeRequestsCount}</span>
+                <span className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 text-xs font-bold px-2 py-0.5 rounded-full shadow-sm">{storeRequestsCount}</span>
               ) : null}
             </NavLink>
           );
